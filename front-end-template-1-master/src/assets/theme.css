@@ -1,0 +1,174 @@
+:root {
+  --bg: #060b16;
+  --bg-2: #0c1426;
+  --panel: #101b31;
+  --panel-2: #14203a;
+  --text: #dbe8fb;
+  --text-muted: #8ea5c3;
+  --border: #243a5c;
+  --accent: #3f8cff;
+  --accent-2: #33c5c9;
+  --success: #1ec28b;
+  --warn: #d8a54a;
+  --error: #e26666;
+
+  --sp-1: 8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-4: 32px;
+
+  --fs-12: 12px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-20: 20px;
+  --fs-28: 28px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 600;
+
+  --radius: 12px;
+  --shadow: 0 16px 34px rgba(1, 6, 15, 0.52);
+  --hover-lift-y: -1px;
+  --hover-glow-border: #5f86be;
+  --hover-glow-shadow: 0 18px 32px rgba(6, 12, 24, 0.58);
+  --tooltip-bg: rgba(17, 25, 38, 0.95);
+  --tooltip-border: rgba(104, 150, 220, 0.65);
+  --tooltip-text: #dfefff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: radial-gradient(1200px 560px at 10% -10%, rgba(63, 140, 255, 0.22), transparent 45%),
+    radial-gradient(1100px 480px at 92% -18%, rgba(51, 197, 201, 0.18), transparent 42%),
+    linear-gradient(180deg, var(--bg), var(--bg-2));
+  color: var(--text);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+#app {
+  min-height: 100vh;
+  background: transparent;
+}
+
+.glass-card,
+.panel,
+.table-shell {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.section-title {
+  font-size: var(--fs-16);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+}
+
+.btn-primary-glow {
+  background: linear-gradient(135deg, #2f80ed, #55a8ff) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+.btn-ghost {
+  background: #1b2940;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-ghost:hover {
+  background: #233451;
+}
+
+.glow-hover,
+.glass-card,
+.panel {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glow-hover:hover,
+.glass-card:hover,
+.panel:hover {
+  transform: translateY(var(--hover-lift-y));
+  border-color: var(--hover-glow-border);
+  box-shadow: var(--hover-glow-shadow);
+}
+
+/* ElementUI unified overrides */
+.el-button--primary {
+  background: linear-gradient(135deg, #2f80ed, #55a8ff);
+  border: none;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  filter: brightness(1.05);
+}
+
+.el-button--default {
+  border-color: var(--border);
+  color: var(--text);
+  background: #1b2940;
+}
+
+.el-input__inner,
+.el-textarea__inner,
+.el-select .el-input__inner,
+.el-date-editor .el-input__inner,
+.el-date-editor.el-input .el-input__inner {
+  border-color: var(--border);
+  background: #111a2a;
+  color: var(--text);
+}
+
+.el-input__inner:focus,
+.el-textarea__inner:focus {
+  border-color: #8fc0f1;
+}
+
+/* 日期框只读时浏览器/Element 常拉回浅底，强制跟表单一致 */
+.el-date-editor .el-input__inner[readonly] {
+  background: #111a2a !important;
+  color: var(--text) !important;
+  cursor: pointer;
+}
+
+.el-table {
+  color: var(--text);
+}
+
+.el-table th.el-table__cell {
+  background: #1b2940;
+  color: var(--text-muted);
+}
+
+.el-dialog {
+  border-radius: 12px;
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid var(--border);
+}
+
+/* 全屏 Loading（总览 / 后台），与 ScreenHeader 一致，全局可用 */
+.screen-dash-loading .el-loading-text {
+  color: #5ecfff !important;
+  font-size: 16px !important;
+}
+.screen-dash-loading .el-loading-spinner .path {
+  stroke: #5ecfff !important;
+}
+
+/* 全屏 Loading 必须压在侧栏、自定义弹窗、DatePicker 之上 */
+.el-loading-mask.screen-dash-loading {
+  z-index: 100000 !important;
+}

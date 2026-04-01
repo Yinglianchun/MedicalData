@@ -1,0 +1,23 @@
+# 排除所有虚拟环境文件夹
+.venv/
+venv/
+ENV/
+
+# 排除 Python 缓存
+__pycache__/
+*.pyc
+
+# 排除前端依赖
+node_modules/
+
+# 排除编辑器配置
+.idea/
+.vscode/
+
+# 排除打包产物
+dist/
+build/
+
+# 排除文档和数据文件
+*.md
+*.csv
