@@ -1,68 +1,104 @@
 <template>
-  <div class="pred-container">
-    <div class="left">
-      <div class="title">
-        <img :src="logoImg" class="logo" alt="" />
-        病情初步预测
+  <div class="prediction-page">
+    <section class="hero-panel glass-card">
+      <div class="hero-copy">
+        <span class="hero-kicker">个人健康服务</span>
+        <div class="hero-title-row">
+          <img :src="logoImg" class="hero-logo" alt="Medical Data logo" />
+          <div>
+            <h1>病情初步预测</h1>
+            <p>把症状描述清楚，系统会给出一个用于演示的初步结果参考。</p>
+          </div>
+        </div>
       </div>
-      <div class="mode-row">
+
+      <div class="mode-card">
         <span class="mode-label">预测模式</span>
         <el-radio-group v-model="predictRealOnly" size="mini">
-          <el-radio-button :label="false">真实+合成</el-radio-button>
+          <el-radio-button :label="false">真实 + 合成</el-radio-button>
           <el-radio-button :label="true">仅真实</el-radio-button>
         </el-radio-group>
       </div>
-      <div class="form">
-        <div class="form-group">
-          <div class="form-label">病情描述：</div>
-          <div class="form-control">
-            <textarea
-              v-model="symptomInput"
-              placeholder="请输入病情描述"
-              rows="4"
-              :disabled="loading"
-            />
+    </section>
+
+    <section class="prediction-grid">
+      <form class="editor-panel glass-card" @submit.prevent="submitPrediction">
+        <div class="panel-head">
+          <div>
+            <h2>症状描述</h2>
+            <p>尽量写出持续时间、疼痛部位、伴随症状等关键信息。</p>
           </div>
+          <span class="count-pill">{{ symptomLength }} 字</span>
         </div>
-        <div class="button">
-          <button type="button" :disabled="loading || !symptomInput.trim()" @click="submitPrediction">
-            {{ loading ? '分析中...' : '提交' }}
+
+        <label class="editor-label" for="symptom-input">请输入病情描述</label>
+        <textarea
+          id="symptom-input"
+          v-model="symptomInput"
+          class="editor-textarea"
+          rows="8"
+          :disabled="loading"
+          placeholder="例如：近三天持续咳嗽，夜间明显，伴轻微发热和胸闷。"
+        ></textarea>
+
+        <div class="editor-foot">
+          <p class="editor-tip">结果仅用于课程演示与参考，不可替代专业问诊。</p>
+          <button
+            type="submit"
+            class="submit-btn"
+            :disabled="loading || !symptomInput.trim()"
+          >
+            {{ loading ? '分析中...' : '提交预测' }}
           </button>
         </div>
-      </div>
-    </div>
-    <div class="right">
-      <div class="top">
-        <div class="content">
-          <div class="block-title">提示</div>
-          <dv-border-box-8>
-            <div class="word tip-inner">
-              这里展示预测结果只有参考价值，如有身体不适请尽快就医。当前模型：{{ resultModelText }}
+      </form>
+
+      <aside class="result-column">
+        <section class="note-panel glass-card">
+          <div class="panel-head compact">
+            <h2>提示</h2>
+          </div>
+          <p class="note-copy">
+            这里展示的预测结果仅有参考价值，如有身体不适请尽快就医。当前模型：
+            <strong>{{ resultModelText }}</strong>
+          </p>
+        </section>
+
+        <section class="result-panel glass-card">
+          <div class="panel-head compact">
+            <div>
+              <h2>预测结果</h2>
+              <p>提交后会在这里展示模型返回结果。</p>
             </div>
-          </dv-border-box-8>
-        </div>
-      </div>
-      <div class="bottom">
-        <div class="content">
-          <div class="block-title">预测结果</div>
-          <dv-decoration-11 class="decoration-result">
-            <div class="word result-inner">
-              {{ displayResult }}
-            </div>
-          </dv-decoration-11>
-        </div>
-      </div>
-      <div v-if="historyCount > 0" class="history-hint">已累计预测 {{ historyCount }} 次（演示）</div>
-    </div>
+          </div>
+
+          <AppLoading v-if="loading" label="正在分析症状..." compact></AppLoading>
+
+          <div v-else class="result-shell" :class="{ 'result-shell--filled': hasResult }">
+            <span class="result-state">{{ hasResult ? '分析完成' : '等待提交' }}</span>
+            <div class="result-value">{{ displayResult }}</div>
+          </div>
+        </section>
+
+        <section v-if="historyCount > 0" class="history-panel glass-card">
+          <span class="history-label">体验记录</span>
+          <strong>已累计预测 {{ historyCount }} 次</strong>
+        </section>
+      </aside>
+    </section>
   </div>
 </template>
 
 <script>
 import { submitPrediction as predictRequest } from '@/api/admin'
 import logoImg from '@/assets/logo.png'
+import AppLoading from '@/components/AppLoading.vue'
 
 export default {
   name: 'Prediction',
+  components: {
+    AppLoading
+  },
   data() {
     return {
       logoImg,
@@ -72,39 +108,45 @@ export default {
       loading: false,
       historyCount: 0,
       predictRealOnly: false,
-      resultModelText: '真实+合成'
+      resultModelText: '真实 + 合成'
     }
   },
   computed: {
     displayResult() {
-      if (this.loading) return '分析中...'
       if (this.hasResult && this.predictionResult) return this.predictionResult
       return '提交后在此显示'
+    },
+    symptomLength() {
+      return this.symptomInput.trim().length
     }
   },
   methods: {
     async submitPrediction() {
-      if (!this.symptomInput.trim()) {
+      const content = this.symptomInput.trim()
+      if (!content) {
         this.$message.warning('请输入症状描述')
         return
       }
+
       this.loading = true
       this.hasResult = false
+
       try {
-        const res = await predictRequest(this.symptomInput.trim(), {
+        const res = await predictRequest(content, {
           real_only: this.predictRealOnly
         })
+
         if (res.code === 200) {
           this.predictionResult = res.data.resultData || '未知'
-          this.resultModelText = res.data.modelMode === 'real_only' ? '仅真实' : '真实+合成'
+          this.resultModelText = res.data.modelMode === 'real_only' ? '仅真实' : '真实 + 合成'
           this.hasResult = true
           this.historyCount += 1
         } else {
           this.$message.error(res.message || '预测失败')
         }
-      } catch (e) {
-        console.error('预测失败:', e)
-        this.$message.error('预测失败：' + (e.message || '请检查网络连接'))
+      } catch (error) {
+        console.error('预测失败:', error)
+        this.$message.error(`预测失败：${error.message || '请检查网络连接'}`)
       } finally {
         this.loading = false
       }
@@ -113,162 +155,300 @@ export default {
 }
 </script>
 
-<style lang="less" scoped>
-.button {
-  width: 100%;
-  height: 40px;
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
+<style scoped>
+.prediction-page {
+  display: grid;
+  gap: 24px;
+  color: var(--text);
 }
-button {
-  width: 80%;
-  height: 100%;
-  background: #26fffd;
-  color: rgb(0, 0, 0);
-  border-radius: 15px;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
+
+.hero-panel {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  background: linear-gradient(135deg, rgba(16, 27, 49, 0.96), rgba(14, 22, 38, 0.86));
+}
+
+.hero-kicker {
+  display: inline-flex;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(82, 162, 228, 0.22);
+  background: rgba(17, 26, 42, 0.76);
+  color: #9dc6ff;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.hero-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.hero-copy h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 48px);
+  line-height: 1.05;
+  color: #e8f2ff;
+}
+
+.hero-copy p {
+  margin: 12px 0 0;
+  max-width: 560px;
+  color: #9fb6d4;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.mode-card {
+  min-width: 240px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(82, 162, 228, 0.18);
+  background: rgba(11, 19, 34, 0.68);
+}
+
+.mode-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #9fb6d4;
+  font-size: 13px;
+}
+
+.prediction-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.86fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.editor-panel,
+.note-panel,
+.result-panel,
+.history-panel {
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(16, 27, 49, 0.94), rgba(11, 19, 34, 0.9));
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.panel-head.compact {
+  margin-bottom: 14px;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #edf6ff;
+}
+
+.panel-head p {
+  margin: 8px 0 0;
+  color: #8ea5c3;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.count-pill {
+  display: inline-flex;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(63, 140, 255, 0.12);
+  color: #9dc6ff;
+  font-size: 13px;
+}
+
+.editor-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #dbe8fb;
+  font-size: 14px;
   font-weight: 600;
 }
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.pred-container {
-  display: flex;
+
+.editor-textarea {
   width: 100%;
-  min-height: calc(100vh - 100px);
-  .left {
-    width: 800px;
-    max-width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    .title {
-      color: #26fffd;
-      margin-top: 48px;
-      font-size: 38px;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .logo {
-      width: 80px;
-      height: 80px;
-    }
-    .mode-row {
-      margin-top: 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .mode-label {
-      font-size: 14px;
-      color: #fff;
-    }
-    .form {
-      margin-top: 24px;
-      width: 90%;
-      max-width: 480px;
-      .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-bottom: 12px;
-        .form-label {
-          font-size: 18px;
-          color: #fff;
-        }
-        .form-control textarea {
-          width: 100%;
-          border-radius: 15px;
-          background: #d3dcf7;
-          border: none;
-          outline: none;
-          padding: 10px 12px;
-          font-size: 15px;
-          box-sizing: border-box;
-          resize: vertical;
-          font-family: inherit;
-        }
-      }
-    }
+  min-height: 230px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(82, 162, 228, 0.16);
+  background: rgba(232, 240, 255, 0.9);
+  color: #122033;
+  font-size: 15px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.editor-textarea:focus {
+  border-color: rgba(63, 140, 255, 0.42);
+  box-shadow: 0 0 0 4px rgba(63, 140, 255, 0.14);
+}
+
+.editor-foot {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.editor-tip {
+  margin: 0;
+  color: #8ea5c3;
+  font-size: 13px;
+}
+
+.submit-btn {
+  min-width: 168px;
+  padding: 14px 22px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2f80ed, #33c5c9);
+  color: #04111f;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 28px rgba(7, 20, 38, 0.34);
+  filter: brightness(1.03);
+}
+
+.submit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.result-column {
+  display: grid;
+  gap: 18px;
+}
+
+.note-copy {
+  margin: 0;
+  color: #a9c1de;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.note-copy strong {
+  color: #dff3ff;
+  font-weight: 600;
+}
+
+.result-shell {
+  display: grid;
+  gap: 18px;
+  min-height: 220px;
+  align-content: center;
+  justify-items: start;
+  padding: 22px;
+  border-radius: 20px;
+  border: 1px dashed rgba(82, 162, 228, 0.28);
+  background:
+    linear-gradient(180deg, rgba(11, 19, 34, 0.86), rgba(11, 19, 34, 0.68)),
+    radial-gradient(320px 180px at 0% 0%, rgba(63, 140, 255, 0.12), transparent 58%);
+}
+
+.result-shell--filled {
+  border-style: solid;
+  border-color: rgba(82, 162, 228, 0.24);
+}
+
+.result-state {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(51, 197, 201, 0.12);
+  color: #9be7ea;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.result-value {
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.15;
+  font-weight: 700;
+  color: #edf6ff;
+  word-break: break-word;
+}
+
+.history-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-label {
+  color: #8ea5c3;
+  font-size: 13px;
+}
+
+.history-panel strong {
+  color: #e8f2ff;
+  font-size: 15px;
+}
+
+@media (max-width: 1024px) {
+  .hero-panel,
+  .prediction-grid {
+    grid-template-columns: 1fr;
   }
-  .right {
-    flex: 1;
-    min-width: 280px;
-    .top {
-      margin-top: 30px;
-      width: 90%;
-      .content {
-        padding: 15px 25px;
-        .block-title {
-          display: flex;
-          justify-content: center;
-          color: #fff;
-          font-weight: bold;
-          font-size: 22px;
-          margin-bottom: 8px;
-        }
-        .tip-inner {
-          min-height: 80px;
-          text-align: center;
-          margin: 12px 10px 8px;
-          font-size: 15px;
-          line-height: 1.5;
-        }
-      }
-    }
-    .bottom {
-      margin-top: 24px;
-      width: 90%;
-      .content {
-        padding: 15px 25px;
-        .block-title {
-          display: flex;
-          justify-content: center;
-          color: #fff;
-          font-weight: bold;
-          font-size: 22px;
-          margin-bottom: 8px;
-        }
-        .decoration-result {
-          height: 120px;
-          text-align: center;
-        }
-        .result-inner {
-          font-size: 18px;
-          padding: 8px 16px;
-        }
-      }
-    }
-    .history-hint {
-      margin: 16px 25px;
-      font-size: 13px;
-      color: #8ea5c3;
-    }
+
+  .hero-panel {
+    align-items: flex-start;
   }
 }
-.word {
-  background: linear-gradient(to right, orange, #26fffd);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  display: inline-block;
-}
-@media (max-width: 1100px) {
-  .pred-container {
-    flex-direction: column;
-    .left {
-      width: 100%;
-    }
+
+@media (max-width: 640px) {
+  .hero-panel,
+  .editor-panel,
+  .note-panel,
+  .result-panel,
+  .history-panel {
+    padding: 18px;
+  }
+
+  .hero-title-row {
+    align-items: flex-start;
+  }
+
+  .hero-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .editor-foot {
+    align-items: stretch;
+  }
+
+  .submit-btn {
+    width: 100%;
   }
 }
 </style>

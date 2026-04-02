@@ -46,7 +46,7 @@
       </section>
     </div>
 
-    <el-dialog title="注册账号" :visible.sync="registerVisible" width="420px" :close-on-click-modal="false">
+    <el-dialog title="用户注册" :visible.sync="registerVisible" width="420px" :close-on-click-modal="false">
       <el-form label-position="top">
         <el-form-item label="用户名">
           <el-input v-model.trim="registerForm.username" placeholder="请输入用户名" />
@@ -68,6 +68,7 @@
 
 <script>
 import { login, register } from '@/api/admin'
+import { showFullscreenLoading } from '@/utils/fullscreenLoading'
 
 export default {
   name: 'Login',
@@ -88,12 +89,11 @@ export default {
         this.$message.warning('账号和密码不能为空')
         return
       }
-      const loader = this.$loading({ lock: true, text: '登录中...', background: 'rgba(243, 247, 252, 0.85)' })
+      const loader = showFullscreenLoading('正在验证登录信息')
       try {
         this.loading = true
         const res = await login(this.username, this.password)
         if (res.code === 200) {
-          this.$message.success('登录成功')
           const role = res.data.role
           if (this.remember) {
             // 简单记忆用户名
@@ -101,8 +101,9 @@ export default {
           } else {
             localStorage.removeItem('md-username')
           }
-          if (role === 'admin') this.$router.push('/admin/dashboard')
-          else this.$router.push('/user/predict')
+          loader.setText(role === 'admin' ? '正在进入后台管理' : '正在进入用户服务')
+          if (role === 'admin') await this.$router.push('/admin/dashboard')
+          else await this.$router.push('/user/predict')
         } else {
           this.$message.error(res.message || '登录失败')
         }

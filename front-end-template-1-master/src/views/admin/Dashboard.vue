@@ -1,9 +1,11 @@
 <template>
-  <div id="" class="home">
+  <div class="home screen-dashboard">
     <!-- // 判断config4是否存在,config4被赋值完才开始加载  -->
     <transition name="fade" mode="out-in">
-      <dv-loading v-if="!config4.data.length">Loading...</dv-loading>
-      <dv-border-box-10>
+      <div v-if="!config4.data.length" class="dashboard-loader-shell">
+        <AppLoading label="正在加载可视化数据..." fullscreen></AppLoading>
+      </div>
+      <dv-border-box-10 v-else>
         <div class="naca" id="name">
           <div class="index-header" style="margin-top: 5px">
             <div>
@@ -180,6 +182,7 @@
 <script>
 import $ from "jquery";
 import LeftTop from "@/components/LeftTop.vue";
+import AppLoading from "@/components/AppLoading.vue";
 import { color } from "echarts";
 function formatter(number) {
   const numbers = number.toString().split("").reverse();
@@ -607,11 +610,22 @@ export default {
   },
   components: {
     LeftTop,
+    AppLoading,
   },
 };
 </script>
 
 <style lang="less" scoped>
+.screen-dashboard {
+  position: relative;
+  min-height: calc(100vh - 140px);
+}
+
+.dashboard-loader-shell {
+  position: relative;
+  min-height: calc(100vh - 140px);
+}
+
 .loading {
   position: absolute;
   left: 50%;

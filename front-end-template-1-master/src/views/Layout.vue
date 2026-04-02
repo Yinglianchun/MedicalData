@@ -1,68 +1,70 @@
 <template>
-  <div class="layout-shell" :class="{ 'screen-mode': isSingleScreenMode }">
+  <div class="layout-shell" :class="shellClasses">
+    <StarryBackground
+      :particles-number="backgroundParticles"
+      :particle-opacity="backgroundOpacity"
+      :line-opacity="backgroundLineOpacity"
+      :move-speed="backgroundSpeed"
+      :particle-size="backgroundSize"
+      :click-effect="isSingleScreenMode"
+    ></StarryBackground>
+
     <aside v-if="!isSingleScreenMode" class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div class="brand-row brand-row-minimal">
+      <div class="brand-row">
+        <div class="brand-anchor" :class="{ centered: sidebarCollapsed }">
+          <img :src="logoImg" class="brand-icon" alt="Medical Data logo" />
+          <div v-if="!sidebarCollapsed" class="brand-copy">
+            <div class="brand-title">Medical Data</div>
+            <div class="brand-sub">{{ isAdminMode ? 'Admin Console' : 'Patient Workspace' }}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="collapse-btn"
+          :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+          @click="toggleSidebar"
+        >
+          <i :class="sidebarCollapsed ? 'el-icon-s-unfold' : 'el-icon-s-fold'"></i>
+        </button>
+      </div>
+
+      <div class="sidebar-body">
         <button
           v-if="showBackToDashboard"
           type="button"
           class="back-btn-sidebar"
-          :title="sidebarCollapsed ? '返回总览' : ''"
           @click="goDashboard"
         >
           <i class="el-icon-back"></i>
-          <span v-if="!sidebarCollapsed">返回</span>
+          <span v-if="!sidebarCollapsed">返回总览</span>
         </button>
-        <span v-else class="brand-spacer" />
-        <button class="collapse-btn" @click="toggleSidebar" :title="sidebarCollapsed ? '展开' : '收起'">
-          <i v-if="!sidebarCollapsed" class="el-icon-s-fold"></i>
-          <i v-else class="el-icon-s-unfold"></i>
-        </button>
+
+        <p v-if="!sidebarCollapsed" class="nav-label">{{ navLabel }}</p>
+
+        <nav class="sidebar-nav" :aria-label="navLabel">
+          <router-link
+            v-for="item in visibleNavItems"
+            :key="item.path"
+            :to="item.path"
+            class="nav-item"
+            :class="{ active: $route.path === item.path }"
+            :title="item.label"
+          >
+            <span class="nav-icon"><i :class="item.icon"></i></span>
+            <span v-if="!sidebarCollapsed" class="nav-text">{{ item.label }}</span>
+          </router-link>
+        </nav>
       </div>
 
-      <nav class="sidebar-nav">
-        <p v-if="!sidebarCollapsed" class="nav-label">控制台</p>
-        <template v-if="userRole === 'admin'">
-          <router-link
-            to="/admin/users"
-            class="nav-item"
-            title="用户管理"
-            :class="{ 'router-link-active': $route.path === '/admin/users' }"
-          >
-            <span class="nav-icon"><i class="el-icon-s-operation"></i></span>
-            <span v-if="!sidebarCollapsed" class="nav-text">用户管理</span>
-          </router-link>
-
-          <router-link
-            to="/admin/cases"
-            class="nav-item"
-            title="病例管理"
-            :class="{ 'router-link-active': $route.path === '/admin/cases' }"
-          >
-            <span class="nav-icon"><i class="el-icon-folder-opened"></i></span>
-            <span v-if="!sidebarCollapsed" class="nav-text">病例管理</span>
-          </router-link>
-        </template>
-        <template v-else>
-          <router-link to="/user/predict" class="nav-item" title="病情预测">
-            <span class="nav-icon"><i class="el-icon-view"></i></span>
-            <span v-if="!sidebarCollapsed" class="nav-text">病情预测</span>
-          </router-link>
-          <router-link to="/user/cases" class="nav-item" title="我的病例">
-            <span class="nav-icon"><i class="el-icon-folder-opened"></i></span>
-            <span v-if="!sidebarCollapsed" class="nav-text">我的病例</span>
-          </router-link>
-        </template>
-      </nav>
-
       <div class="sidebar-footer">
-        <div class="user-chip" v-if="!sidebarCollapsed">
+        <div v-if="!sidebarCollapsed" class="user-chip">
           <div class="avatar">{{ username ? username.charAt(0).toUpperCase() : 'U' }}</div>
           <div class="user-text">
             <div class="name">{{ username || '未登录' }}</div>
-            <div class="role">{{ userRole === 'admin' ? '管理员' : '普通用户' }}</div>
+            <div class="role">{{ isAdminMode ? '管理员' : '普通用户' }}</div>
           </div>
         </div>
-        <button class="logout" @click="handleLogout" :title="sidebarCollapsed ? '退出登录' : ''">
+        <button type="button" class="logout" @click="handleLogout">
           <span class="nav-icon"><i class="el-icon-switch-button"></i></span>
           <span v-if="!sidebarCollapsed" class="nav-text">退出登录</span>
         </button>
@@ -70,42 +72,37 @@
     </aside>
 
     <main class="main-area">
-      <header v-if="isSingleScreenMode && userRole === 'admin'" class="topbar topbar-screen-tmpl">
+      <header v-if="isSingleScreenMode && isAdminMode" class="topbar topbar-screen">
         <ScreenHeader>
           <template #actions>
-            <span class="screen-user-chip">{{ username || 'Admin' }}</span>
+            <span class="screen-user-chip">{{ username || 'admin' }}</span>
             <button type="button" class="screen-logout" @click="handleLogout">退出</button>
           </template>
         </ScreenHeader>
       </header>
-      <header v-else class="topbar topbar-main" :class="{ compact: isSingleScreenMode }">
-        <div class="topbar-left">
-          <div class="page-meta">
-            <div class="crumb">{{ pageTitle }}</div>
+
+      <header v-else class="topbar topbar-main">
+        <div class="page-meta">
+          <span class="page-kicker">{{ pageKicker }}</span>
+          <div class="page-title-row">
+            <h1 class="crumb">{{ pageTitle }}</h1>
             <span class="time">{{ currentTime }}</span>
           </div>
-          <div v-if="adminBackendActive" class="backend-tabs">
-            <router-link
-              to="/admin/users"
-              class="backend-tab"
-              active-class="active"
-              exact
-            >
-              用户管理
-            </router-link>
-            <router-link to="/admin/cases" class="backend-tab" active-class="active">
-              病例管理
-            </router-link>
-          </div>
+          <p class="page-desc">{{ pageDescription }}</p>
         </div>
-        <div class="topbar-brand">
-          <img :src="logoImg" class="brand-icon-top" alt="" />
-          <div class="brand-meta-top">
-            <div class="brand-title">Medical Data</div>
-            <div class="brand-sub">Visualization</div>
+
+        <div class="topbar-actions">
+          <span v-if="isUserMode" class="role-badge-top">个人服务</span>
+          <div class="topbar-brand">
+            <img :src="logoImg" class="brand-icon-top" alt="Medical Data logo" />
+            <div class="brand-meta-top">
+              <div class="brand-title">Medical Data</div>
+              <div class="brand-sub">Visualization</div>
+            </div>
           </div>
         </div>
       </header>
+
       <section class="content-area">
         <router-view />
       </section>
@@ -117,31 +114,63 @@
 import { getCurrentUser, logout } from '@/api/admin'
 import logoImg from '@/assets/logo.png'
 import ScreenHeader from '@/components/ScreenHeader.vue'
+import StarryBackground from '@/components/StarryBackground.vue'
+import { showFullscreenLoading } from '@/utils/fullscreenLoading'
+
+const NAV_ITEMS = {
+  admin: [
+    { path: '/admin/users', label: '用户管理', icon: 'el-icon-s-operation' },
+    { path: '/admin/cases', label: '病例管理', icon: 'el-icon-folder-opened' }
+  ],
+  user: [
+    { path: '/user/predict', label: '病情预测', icon: 'el-icon-view' },
+    { path: '/user/cases', label: '我的病例', icon: 'el-icon-folder-opened' }
+  ]
+}
 
 export default {
   name: 'Layout',
-  components: { ScreenHeader },
+  components: {
+    ScreenHeader,
+    StarryBackground
+  },
   data() {
     return {
       logoImg,
       sidebarCollapsed: false,
       username: '',
       userRole: '',
-      currentTime: ''
+      currentTime: '',
+      timer: null
     }
   },
   computed: {
-    adminBackendActive() {
-      return this.userRole === 'admin' && (this.$route.path === '/admin/users' || this.$route.path === '/admin/cases')
+    isAdminMode() {
+      return this.userRole === 'admin'
     },
-    showBackToDashboard() {
-      return this.adminBackendActive
+    isUserMode() {
+      return this.userRole === 'user'
     },
     isSingleScreenMode() {
       return this.$route.path === '/admin/dashboard'
     },
+    adminBackendActive() {
+      return this.isAdminMode && (this.$route.path === '/admin/users' || this.$route.path === '/admin/cases')
+    },
+    showBackToDashboard() {
+      return this.adminBackendActive
+    },
+    visibleNavItems() {
+      if (this.isAdminMode) return NAV_ITEMS.admin
+      if (this.isUserMode) return NAV_ITEMS.user
+      return []
+    },
+    navLabel() {
+      if (this.isAdminMode) return '管理工作台'
+      if (this.isUserMode) return '个人服务'
+      return '导航'
+    },
     pageTitle() {
-      const route = this.$route.path
       const titleMap = {
         '/admin/dashboard': '数据总览',
         '/admin/users': '用户管理',
@@ -149,7 +178,46 @@ export default {
         '/user/predict': '病情预测',
         '/user/cases': '我的病例'
       }
-      return titleMap[route] || '医疗数据看板'
+      return titleMap[this.$route.path] || '医疗数据分析系统'
+    },
+    pageKicker() {
+      if (this.isAdminMode) return this.isSingleScreenMode ? '可视化总览' : '后台管理'
+      return '用户服务'
+    },
+    pageDescription() {
+      const descMap = {
+        '/admin/dashboard': '集中展示医疗数据分布、趋势和关键指标。',
+        '/admin/users': '维护系统用户角色、状态与基础信息。',
+        '/admin/cases': '查看、检索并维护病例数据。',
+        '/user/predict': '输入症状描述，快速获得初步预测参考。',
+        '/user/cases': '查看个人就诊记录与历史信息。'
+      }
+      return descMap[this.$route.path] || '统一的医疗数据可视化与管理体验。'
+    },
+    backgroundParticles() {
+      if (this.isSingleScreenMode) return 96
+      return this.isUserMode ? 46 : 62
+    },
+    backgroundOpacity() {
+      if (this.isSingleScreenMode) return 0.15
+      return this.isUserMode ? 0.08 : 0.11
+    },
+    backgroundLineOpacity() {
+      if (this.isSingleScreenMode) return 0.2
+      return this.isUserMode ? 0.12 : 0.16
+    },
+    backgroundSpeed() {
+      return this.isSingleScreenMode ? 1.8 : 1.1
+    },
+    backgroundSize() {
+      return this.isSingleScreenMode ? 3 : 2
+    },
+    shellClasses() {
+      return {
+        'screen-mode': this.isSingleScreenMode,
+        'admin-mode': this.isAdminMode,
+        'user-mode': this.isUserMode
+      }
     }
   },
   created() {
@@ -158,9 +226,7 @@ export default {
     this.timer = setInterval(this.updateTime, 60000)
   },
   beforeDestroy() {
-    if (this.timer) {
-      clearInterval(this.timer)
-    }
+    if (this.timer) clearInterval(this.timer)
   },
   methods: {
     async getUserInfo() {
@@ -172,8 +238,8 @@ export default {
         } else {
           this.$router.push('/login')
         }
-      } catch (e) {
-        console.error('获取用户信息失败', e)
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
         this.$router.push('/login')
       }
     },
@@ -190,19 +256,20 @@ export default {
           confirmButtonText: '确定',
           cancelButtonText: '取消'
         })
-        const loader = this.$loading({
-          lock: true,
-          text: '正在退出...',
-          background: 'rgba(15, 23, 42, 0.22)'
-        })
+      } catch (error) {
+        return
+      }
+
+      const loader = showFullscreenLoading('正在退出登录')
+
+      try {
         await logout()
+        await this.$router.push('/login')
+      } catch (error) {
+        console.error('退出登录异常:', error)
+        await this.$router.push('/login')
+      } finally {
         loader.close()
-        this.$message.success('已退出登录')
-        this.$router.push('/login')
-      } catch (e) {
-        if (String(e).includes('cancel')) return
-        console.error('退出登录异常', e)
-        this.$router.push('/login')
       }
     },
     updateTime() {
@@ -220,387 +287,475 @@ export default {
 
 <style scoped>
 .layout-shell {
+  position: relative;
   display: flex;
   min-height: 100vh;
-  background: var(--bg);
+  background: transparent;
+  color: var(--text);
 }
 
-.layout-shell.screen-mode .content-area {
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
-  overflow-x: auto;
-  overflow-y: auto;
-  min-height: 0;
+.layout-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(6, 11, 22, 0.78), rgba(6, 11, 22, 0.94)),
+    radial-gradient(820px 360px at 12% 0%, rgba(63, 140, 255, 0.1), transparent 55%),
+    radial-gradient(720px 280px at 88% 0%, rgba(51, 197, 201, 0.08), transparent 52%);
+}
+
+.layout-shell.user-mode::before {
+  background:
+    linear-gradient(180deg, rgba(6, 11, 22, 0.64), rgba(6, 11, 22, 0.9)),
+    radial-gradient(900px 400px at 0% 0%, rgba(63, 140, 255, 0.08), transparent 55%),
+    radial-gradient(740px 300px at 100% 0%, rgba(51, 197, 201, 0.06), transparent 50%);
+}
+
+.sidebar,
+.main-area {
+  position: relative;
+  z-index: 1;
 }
 
 .sidebar {
-  width: 244px;
-  background: var(--panel);
-  color: var(--text);
+  width: 252px;
   display: flex;
   flex-direction: column;
-  transition: width 0.24s ease;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid rgba(76, 108, 157, 0.36);
+  background: rgba(12, 20, 38, 0.84);
+  backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
+  transition: width 0.24s ease;
 }
 
-.sidebar.collapsed { width: 84px; }
-
-.sidebar.collapsed .sidebar-footer {
-  padding: var(--sp-1);
+.layout-shell.user-mode .sidebar {
+  background: rgba(12, 20, 38, 0.72);
 }
 
-.sidebar.collapsed .logout {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 12px 0;
-  justify-content: center;
+.sidebar.collapsed {
+  width: 92px;
 }
 
 .brand-row {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2);
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(76, 108, 157, 0.28);
 }
-.brand-row-minimal {
-  justify-content: space-between;
+
+.brand-anchor {
+  display: flex;
   align-items: center;
-}
-.brand-spacer {
+  gap: 12px;
+  min-width: 0;
   flex: 1;
-  min-width: 4px;
 }
-.back-btn-sidebar {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
+
+.brand-anchor.centered {
   justify-content: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-2);
-  color: var(--text);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-.back-btn-sidebar:hover {
-  background: #1b2940;
-  border-color: var(--accent);
-}
-.backend-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: var(--sp-2);
-  flex-wrap: wrap;
-}
-.backend-tab {
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: var(--fs-12);
-  color: var(--text-muted);
-  text-decoration: none;
-  border: 1px solid var(--border);
-  background: var(--bg-2);
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
-}
-.backend-tab:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.backend-tab.active {
-  color: #fff;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  border-color: transparent;
 }
 
 .brand-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
+  border-radius: 12px;
   flex-shrink: 0;
 }
 
-.brand-meta { flex: 1; }
-.brand-title { font-size: var(--fs-16); font-weight: var(--fw-bold); }
-.brand-sub { font-size: var(--fs-12); color: var(--text-muted); }
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.brand-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 .collapse-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
   border: 1px solid var(--border);
-  background: var(--bg-2);
+  border-radius: 10px;
+  background: rgba(17, 26, 42, 0.9);
   color: var(--text);
   cursor: pointer;
-  transition: all 0.2s;
-  display: grid;
-  place-items: center;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
-.collapse-btn i {
-  font-size: 16px;
+
+.collapse-btn:hover {
+  background: #1b2940;
+  border-color: var(--accent);
 }
-.collapse-btn:hover { background: #1b2940; }
+
+.sidebar-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 0 16px;
+  min-height: 0;
+}
+
+.back-btn-sidebar {
+  margin: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(17, 26, 42, 0.88);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.back-btn-sidebar:hover {
+  border-color: var(--accent);
+  background: #1b2940;
+}
 
 .nav-label {
-  padding: 0 var(--sp-2);
-  margin: var(--sp-2) 0 var(--sp-1);
-  font-size: var(--fs-12);
+  padding: 0 18px;
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
-  letter-spacing: 0.2px;
+  text-transform: uppercase;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 0 0 var(--sp-2);
   overflow-y: auto;
+  padding: 0 12px;
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 8px;
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  padding: 12px var(--sp-2);
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border-radius: 12px;
   color: var(--text-muted);
   text-decoration: none;
-  transition: all 0.2s;
-  position: relative;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  border: 1px solid transparent;
 }
-.nav-item:hover { background: var(--bg-2); color: var(--text); }
-.nav-item.router-link-active {
-  background: linear-gradient(90deg, rgba(63, 140, 255, 0.22), transparent);
+
+.nav-item:hover {
   color: var(--text);
+  background: rgba(17, 26, 42, 0.78);
+  border-color: rgba(82, 162, 228, 0.16);
 }
-.nav-item.router-link-active::before {
+
+.nav-item.active {
+  color: var(--text);
+  background: linear-gradient(90deg, rgba(63, 140, 255, 0.2), rgba(63, 140, 255, 0.02));
+  border-color: rgba(82, 162, 228, 0.22);
+}
+
+.nav-item.active::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
+  left: -1px;
+  top: 9px;
+  bottom: 9px;
   width: 3px;
-  background: var(--accent);
-  border-radius: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
 }
+
 .nav-icon {
-  min-width: 42px;
-  height: 28px;
-  border-radius: 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  width: 38px;
+  height: 30px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
+  border-radius: 9px;
+  border: 1px solid rgba(82, 162, 228, 0.14);
+  background: rgba(17, 26, 42, 0.88);
   color: var(--text);
 }
-.nav-icon i {
-  font-size: 16px;
-  color: inherit;
+
+.nav-text {
+  font-size: 14px;
+  line-height: 1.2;
 }
-.nav-text { font-size: var(--fs-14); }
 
 .sidebar-footer {
-  padding: var(--sp-2);
-  border-top: 1px solid var(--border);
   display: grid;
-  gap: var(--sp-1);
+  gap: 8px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(76, 108, 157, 0.28);
 }
+
 .user-chip {
   display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: var(--sp-1);
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
   align-items: center;
-  background: var(--bg-2);
-  border-radius: var(--radius);
-  padding: var(--sp-1);
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(17, 26, 42, 0.8);
 }
+
 .avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
   display: grid;
   place-items: center;
-  font-weight: var(--fw-bold);
   color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2f80ed, #55a8ff);
 }
-.user-text .name { font-size: var(--fs-14); font-weight: var(--fw-bold); }
-.user-text .role { font-size: var(--fs-12); color: var(--text-muted); margin-top: 4px; }
+
+.user-text .name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.user-text .role {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 .logout {
-  border: 1px solid var(--border);
-  background: var(--bg-2);
-  color: var(--text);
-  padding: 12px var(--sp-2);
-  border-radius: var(--radius);
-  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  transition: all 0.2s;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(82, 162, 228, 0.22);
+  background: rgba(17, 26, 42, 0.8);
+  color: var(--text);
+  cursor: pointer;
 }
-.logout:hover { background: #1b2940; }
+
+.logout:hover {
+  border-color: rgba(82, 162, 228, 0.42);
+  background: #1b2940;
+}
 
 .main-area {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 100vh;
-  overflow: hidden;
 }
 
 .topbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-2);
-  backdrop-filter: blur(6px);
+  gap: 20px;
+  padding: 18px 26px;
+  border-bottom: 1px solid rgba(76, 108, 157, 0.26);
+  backdrop-filter: blur(14px);
+  background: rgba(20, 32, 58, 0.7);
 }
-.topbar.compact {
-  padding: 12px var(--sp-3);
+
+.topbar-screen {
+  padding: 0 12px 10px;
+  background: linear-gradient(180deg, rgba(8, 14, 28, 0.82), rgba(8, 14, 28, 0.65));
 }
-.topbar-main {
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-2);
-}
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex: 1;
+
+.page-meta {
   min-width: 0;
+}
+
+.page-kicker {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(82, 162, 228, 0.24);
+  background: rgba(17, 26, 42, 0.7);
+  color: #9dc6ff;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
   flex-wrap: wrap;
 }
+
+.crumb {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.time {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.page-desc {
+  margin: 12px 0 0;
+  max-width: 680px;
+  color: #a7bdd9;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.role-badge-top {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(51, 197, 201, 0.12);
+  border: 1px solid rgba(51, 197, 201, 0.2);
+  color: #9be7ea;
+  font-size: 13px;
+}
+
 .topbar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
 }
+
 .brand-icon-top {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 12px;
   object-fit: contain;
 }
+
 .brand-meta-top .brand-title {
-  font-size: var(--fs-16);
-  font-weight: var(--fw-bold);
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text);
-  line-height: 1.2;
 }
+
 .brand-meta-top .brand-sub {
-  font-size: var(--fs-12);
-  color: var(--text-muted);
   margin-top: 2px;
-}
-.topbar-screen-tmpl {
-  flex-wrap: wrap;
-  align-items: stretch;
-  padding: 0 var(--sp-2) 8px;
-  border-bottom: 1px solid rgba(82, 162, 228, 0.25);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.88));
-}
-.topbar-screen-tmpl .screen-user-chip {
-  font-size: 14px;
-  color: #94a3b8;
-}
-.topbar-screen-tmpl .screen-logout {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(82, 162, 228, 0.45);
-  background: rgba(27, 45, 74, 0.9);
-  color: #e2e8f0;
-  font-size: 13px;
-  cursor: pointer;
-}
-.topbar-screen-tmpl .screen-logout:hover {
-  background: #1b2d4a;
-}
-.page-meta { display: flex; align-items: center; gap: var(--sp-2); }
-.crumb {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-bold);
-  color: var(--text);
-}
-.time { color: var(--text-muted); font-size: var(--fs-12); }
-.top-actions { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; justify-content: flex-end; }
-.screen-nav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.screen-nav-link {
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: var(--fs-12);
+  font-size: 12px;
   color: var(--text-muted);
-  text-decoration: none;
-  border: 1px solid var(--border);
-  background: var(--bg-2);
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
 }
-.screen-nav-link:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.screen-nav-link.active {
-  color: #fff;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  border-color: transparent;
-}
+
 .screen-user-chip {
-  font-size: var(--fs-12);
-  color: var(--text-muted);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 14px;
+  color: #9db8da;
 }
+
 .screen-logout {
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-2);
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(82, 162, 228, 0.36);
+  background: rgba(17, 26, 42, 0.78);
   color: var(--text);
-  font-size: var(--fs-12);
   cursor: pointer;
 }
+
 .screen-logout:hover {
   background: #1b2940;
 }
-.pill {
-  padding: 8px var(--sp-2);
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  color: #fff;
-  border-radius: 20px;
-  font-size: var(--fs-14);
-  font-weight: var(--fw-medium);
-}
 
 .content-area {
+  position: relative;
+  z-index: 1;
   flex: 1;
-  padding: var(--sp-2);
+  min-height: 0;
   overflow-y: auto;
+  padding: 22px;
+}
+
+.layout-shell.user-mode .content-area {
+  padding: clamp(24px, 3vw, 36px);
+}
+
+.layout-shell.screen-mode .content-area {
+  padding: 16px 22px 24px;
 }
 
 .sidebar-nav::-webkit-scrollbar,
-.content-area::-webkit-scrollbar { width: 6px; }
+.content-area::-webkit-scrollbar {
+  width: 6px;
+}
+
 .sidebar-nav::-webkit-scrollbar-thumb,
 .content-area::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+  background: rgba(76, 108, 157, 0.65);
+  border-radius: 999px;
 }
-.sidebar-nav::-webkit-scrollbar-thumb:hover,
-.content-area::-webkit-scrollbar-thumb:hover {
-  background: #4b628a;
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 220px;
+  }
+
+  .crumb {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  .layout-shell {
+    flex-direction: column;
+  }
+
+  .sidebar,
+  .sidebar.collapsed {
+    width: 100%;
+  }
+
+  .sidebar-body {
+    padding-top: 12px;
+  }
+
+  .topbar {
+    padding: 16px;
+  }
+
+  .page-title-row {
+    gap: 8px;
+  }
+
+  .crumb {
+    font-size: 24px;
+  }
+
+  .content-area {
+    padding: 16px;
+  }
 }
 </style>

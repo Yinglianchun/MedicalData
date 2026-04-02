@@ -1,51 +1,43 @@
 <template>
-  <div class="my-cases">
-    <div class="page-header">
+  <div class="my-cases-page">
+    <section class="page-header">
+      <span class="page-kicker">个人病例</span>
       <h1>我的病例记录</h1>
-      <p>查看您的个人就诊记录</p>
-    </div>
+      <p>集中查看个人就诊记录、核心指标和就诊信息。</p>
+    </section>
 
-    <!-- 统计卡片 -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-icon" style="background: linear-gradient(135deg, #2f80ed, #55a8ff)">
-          <span>C</span>
-        </div>
+    <section class="stats-row">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><span>C</span></div>
         <div class="stat-content">
           <p>就诊记录</p>
           <h2>{{ cases.length }} 次</h2>
         </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-icon" style="background: linear-gradient(135deg, #2f80ed, #55a8ff)">
-          <span>H</span>
-        </div>
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><span>H</span></div>
         <div class="stat-content">
           <p>最近就诊</p>
           <h2>{{ latestTime }}</h2>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- 病例列表 -->
-    <div class="cases-container">
-      <div v-if="loading" class="loading-state">
-        <div class="loader"></div>
-        <p>加载中...</p>
-      </div>
+    <section class="cases-container glass-card">
+      <AppLoading v-if="loading" label="正在加载病例记录..." compact></AppLoading>
 
       <div v-else-if="cases.length === 0" class="empty-state">
         <div class="empty-icon">CASE</div>
         <h3>暂无就诊记录</h3>
-        <p>您还没有任何就诊记录</p>
+        <p>当前账号还没有病例数据，可以先体验病情预测流程。</p>
         <el-button type="primary" class="btn-goto-predict" @click="gotoPrediction">
-          去进行疾病预测
+          去进行病情预测
         </el-button>
       </div>
 
       <div v-else class="cases-list">
-        <div v-for="(item, index) in cases" :key="item.id" class="case-card">
+        <article v-for="(item, index) in cases" :key="item.id" class="case-card">
           <div class="case-header">
             <div class="case-number">
               <span class="badge">病例 #{{ index + 1 }}</span>
@@ -73,11 +65,11 @@
             <div class="info-row">
               <div class="info-item">
                 <span class="info-label">身高</span>
-                <span class="info-value">{{ item.height ? item.height + ' cm' : '-' }}</span>
+                <span class="info-value">{{ item.height ? `${item.height} cm` : '-' }}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">体重</span>
-                <span class="info-value">{{ item.weight ? item.weight + ' kg' : '-' }}</span>
+                <span class="info-value">{{ item.weight ? `${item.weight} kg` : '-' }}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">患病时长</span>
@@ -110,17 +102,21 @@
               <span class="allergy-text">过敏史：{{ item.allergy }}</span>
             </div>
           </div>
-        </div>
+        </article>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script>
 import { getMyCases } from '@/api/admin'
+import AppLoading from '@/components/AppLoading.vue'
 
 export default {
   name: 'MyCases',
+  components: {
+    AppLoading
+  },
   data() {
     return {
       cases: [],
@@ -128,22 +124,16 @@ export default {
     }
   },
   computed: {
-    // 最近就诊时间
     latestTime() {
       if (this.cases.length === 0) return '-'
-      // 获取最新一条记录的时间
       const latest = this.cases[0]
-      if (latest.create_time) {
-        return this.formatDate(latest.create_time)
-      }
-      return '-'
+      return latest.create_time ? this.formatDate(latest.create_time) : '-'
     }
   },
   mounted() {
     this.loadCases()
   },
   methods: {
-    // 加载个人病例
     async loadCases() {
       this.loading = true
       try {
@@ -153,23 +143,17 @@ export default {
         } else {
           this.$message.error(res.message || '加载失败')
         }
-      } catch (e) {
-        console.error('加载病例失败:', e)
+      } catch (error) {
+        console.error('加载病例失败:', error)
         this.$message.error('加载失败，请刷新重试')
       } finally {
         this.loading = false
       }
     },
-
-    // 格式化日期
     formatDate(dateStr) {
       if (!dateStr) return '-'
-      // 如果是完整的datetime字符串，取日期部分
-      const date = dateStr.split(' ')[0] || dateStr.substring(0, 10)
-      return date
+      return dateStr.split(' ')[0] || dateStr.substring(0, 10)
     },
-
-    // 跳转到预测页面
     gotoPrediction() {
       this.$router.push('/user/predict')
     }
@@ -178,222 +162,161 @@ export default {
 </script>
 
 <style scoped>
-.my-cases {
-  padding: var(--sp-2);
+.my-cases-page {
+  display: grid;
+  gap: 24px;
   color: var(--text);
 }
 
-.page-header {
-  margin-bottom: var(--sp-2);
+.page-kicker {
+  display: inline-flex;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(63, 140, 255, 0.12);
+  border: 1px solid rgba(82, 162, 228, 0.2);
+  color: #9dc6ff;
+  font-size: 12px;
+  letter-spacing: 0.08em;
 }
 
 .page-header h1 {
-  font-size: var(--fs-20);
+  margin: 0;
+  font-size: 30px;
   color: var(--text);
-  margin: 0 0 var(--sp-1) 0;
-  font-weight: var(--fw-bold);
 }
 
 .page-header p {
+  margin: 12px 0 0;
   color: var(--text-muted);
-  margin: 0;
-  font-size: var(--fs-14);
+  font-size: 14px;
+  line-height: 1.7;
 }
 
-/* 统计卡片 */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-2);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
 }
 
 .stat-card {
-  background: var(--panel-2);
-  border-radius: var(--radius);
-  padding: var(--sp-2);
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(var(--hover-lift-y));
-  border-color: var(--hover-glow-border);
-  box-shadow: var(--hover-glow-shadow);
+  gap: 14px;
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(16, 27, 49, 0.92), rgba(11, 19, 34, 0.86));
 }
 
 .stat-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2f80ed, #33c5c9);
+  color: #04111f;
+  font-size: 26px;
+  font-weight: 700;
 }
 
 .stat-content p {
-  font-size: var(--fs-12);
+  margin: 0 0 6px;
   color: var(--text-muted);
-  margin: 0 0 6px 0;
+  font-size: 13px;
 }
 
 .stat-content h2 {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-bold);
-  color: var(--text);
   margin: 0;
+  font-size: 24px;
+  color: var(--text);
 }
 
-/* 病例容器 */
 .cases-container {
-  background: var(--panel);
-  border-radius: var(--radius);
-  padding: var(--sp-2);
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border);
-  min-height: 400px;
-  transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+  padding: 24px;
+  min-height: 360px;
+  background: linear-gradient(180deg, rgba(16, 27, 49, 0.92), rgba(11, 19, 34, 0.88));
 }
 
-.cases-container:hover {
-  transform: translateY(var(--hover-lift-y));
-  border-color: var(--hover-glow-border);
-  box-shadow: var(--hover-glow-shadow);
-}
-
-/* 加载状态 */
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-}
-
-.loader {
-  width: 50px;
-  height: 50px;
-  border: 4px solid var(--border);
-  border-top-color: #2f80ed;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-state p {
-  margin-top: 16px;
-  color: var(--text-muted);
-}
-
-/* 空状态 */
 .empty-state {
+  padding: 56px 20px;
   text-align: center;
-  padding: 80px 20px;
 }
 
 .empty-icon {
-  font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.3;
-  color: var(--text-muted);
+  color: rgba(142, 165, 195, 0.32);
+  font-size: 44px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0.16em;
 }
 
 .empty-state h3 {
-  font-size: var(--fs-16);
+  margin: 0 0 10px;
+  font-size: 22px;
   color: var(--text);
-  margin: 0 0 8px 0;
 }
 
 .empty-state p {
+  margin: 0 0 24px;
   color: var(--text-muted);
-  margin: 0 0 24px 0;
-  font-size: var(--fs-14);
+  line-height: 1.7;
 }
 
 .btn-goto-predict {
-  padding: 12px 32px;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  color: white;
-  border: none;
-  border-radius: var(--radius);
-  font-size: var(--fs-14);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+  padding: 12px 28px;
 }
 
-.btn-goto-predict:hover {
-  transform: translateY(var(--hover-lift-y));
-  box-shadow: var(--hover-glow-shadow);
-}
-
-/* 病例列表 */
 .cases-list {
   display: grid;
-  gap: var(--sp-2);
+  gap: 18px;
 }
 
 .case-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   overflow: hidden;
-  transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+  border-radius: 18px;
+  border: 1px solid rgba(82, 162, 228, 0.16);
+  background: rgba(11, 19, 34, 0.64);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .case-card:hover {
-  transform: translateY(var(--hover-lift-y));
-  border-color: var(--hover-glow-border);
-  box-shadow: var(--hover-glow-shadow);
+  transform: translateY(-1px);
+  border-color: rgba(82, 162, 228, 0.32);
+  box-shadow: 0 18px 32px rgba(6, 12, 24, 0.38);
 }
 
 .case-header {
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  padding: 14px 20px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(47, 128, 237, 0.92), rgba(51, 197, 201, 0.65));
 }
 
 .case-number {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .badge {
-  background: rgba(255, 255, 255, 0.14);
-  color: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
 }
 
-.case-id {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-}
-
+.case-id,
 .case-date {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: var(--fs-14);
-  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
 }
 
 .case-body {
-  padding: 20px;
-  background: var(--panel);
+  padding: 20px 18px 18px;
 }
 
 .info-row {
@@ -410,112 +333,96 @@ export default {
 }
 
 .info-label {
-  font-size: var(--fs-12);
   color: var(--text-muted);
-  font-weight: 500;
+  font-size: 12px;
 }
 
 .info-value {
-  font-size: var(--fs-14);
   color: var(--text);
+  font-size: 14px;
   font-weight: 600;
 }
 
 .type-badge {
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  color: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  display: inline-block;
+  display: inline-flex;
   width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(63, 140, 255, 0.18);
+  color: #dff3ff;
 }
 
-/* 症状描述 */
 .symptom-section {
-  margin-top: 16px;
+  margin-top: 12px;
   padding: 14px 16px;
-  background: #111a2a;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border-radius: 16px;
+  border: 1px solid rgba(82, 162, 228, 0.16);
+  background: rgba(17, 26, 42, 0.74);
 }
 
 .symptom-content {
-  margin: 8px 0 0 0;
-  color: var(--text-muted);
-  line-height: 1.6;
-  font-size: var(--fs-14);
-  word-break: break-word;
+  margin: 8px 0 0;
+  color: #a6bdd9;
+  line-height: 1.7;
 }
 
-/* 医疗信息 */
 .medical-info {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(82, 162, 228, 0.12);
 }
 
 .medical-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--fs-14);
-  color: var(--text-muted);
-  min-width: 0;
+  color: #a6bdd9;
+  font-size: 14px;
 }
 
 .medical-icon {
-  font-size: 13px;
-  font-weight: 700;
-  background: var(--bg-2);
   padding: 3px 7px;
   border-radius: 8px;
+  background: rgba(17, 26, 42, 0.82);
+  border: 1px solid rgba(82, 162, 228, 0.18);
   color: var(--text);
-  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-/* 过敏信息 */
 .allergy-section {
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.08);
-  border-radius: var(--radius);
-  border-left: 4px solid #ef4444;
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(226, 102, 102, 0.08);
+  border-left: 4px solid rgba(226, 102, 102, 0.9);
 }
 
-.allergy-icon {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fca5a5;
-}
-
+.allergy-icon,
 .allergy-text {
-  color: #fca5a5;
-  font-size: var(--fs-14);
-  font-weight: 500;
+  color: #f0aaaa;
+  font-size: 14px;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
-  .info-row {
-    grid-template-columns: 1fr;
+  .cases-container {
+    padding: 18px;
   }
 
   .case-header {
-    flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    flex-direction: column;
   }
 
   .medical-info {
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 }
 </style>

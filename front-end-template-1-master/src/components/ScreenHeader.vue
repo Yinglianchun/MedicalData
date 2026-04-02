@@ -30,6 +30,8 @@
 </template>
 
 <script>
+import { showFullscreenLoading } from '@/utils/fullscreenLoading'
+
 export default {
   name: 'ScreenHeader',
   data() {
@@ -57,23 +59,14 @@ export default {
     },
     async goBackend() {
       if (this.$route.path === '/admin/users' || this.$route.path === '/admin/cases') return
-      const loader = this.$loading({
-        lock: true,
-        text: 'Loading...',
-        spinner: 'el-icon-loading',
-        background: 'rgba(3, 10, 28, 0.92)',
-        customClass: 'screen-dash-loading'
-      })
+      const loader = showFullscreenLoading('正在进入后台管理')
       await this.$nextTick()
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const finish = () => {
-        try {
-          loader.close()
-        } catch (e) {
-          /* ignore */
-        }
+      try {
+        await this.$router.push('/admin/users')
+      } finally {
+        loader.close()
       }
-      this.$router.push('/admin/users').then(finish).catch(finish)
     },
     tickTime() {
       const now = new Date()

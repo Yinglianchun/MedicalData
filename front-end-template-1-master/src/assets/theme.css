@@ -3,6 +3,9 @@
   --bg-2: #0c1426;
   --panel: #101b31;
   --panel-2: #14203a;
+  --panel-soft: rgba(16, 27, 49, 0.78);
+  --panel-user: rgba(11, 19, 34, 0.76);
+  --panel-screen: rgba(8, 14, 28, 0.86);
   --text: #dbe8fb;
   --text-muted: #8ea5c3;
   --border: #243a5c;
@@ -34,6 +37,7 @@
   --tooltip-bg: rgba(17, 25, 38, 0.95);
   --tooltip-border: rgba(104, 150, 220, 0.65);
   --tooltip-text: #dfefff;
+  --overlay-strong: rgba(3, 10, 28, 0.92);
 }
 
 * {
@@ -152,23 +156,111 @@ body {
 }
 
 .el-dialog {
-  border-radius: 12px;
+  border: 1px solid rgba(82, 162, 228, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(20, 32, 58, 0.98), rgba(12, 20, 38, 0.98));
+  box-shadow: 0 28px 48px rgba(1, 8, 20, 0.58);
 }
 
 .el-dialog__header {
-  border-bottom: 1px solid var(--border);
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid rgba(82, 162, 228, 0.14);
+}
+
+.el-dialog__title,
+.el-message-box__title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.el-dialog__headerbtn .el-dialog__close,
+.el-message-box__headerbtn .el-message-box__close {
+  color: var(--text-muted);
+}
+
+.el-dialog__body {
+  padding: 20px 24px 12px;
+  color: var(--text);
+}
+
+.el-dialog__footer {
+  padding: 8px 24px 22px;
+}
+
+.el-form-item__label {
+  color: var(--text-muted);
+}
+
+.el-message-box {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(82, 162, 228, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(20, 32, 58, 0.98), rgba(12, 20, 38, 0.98));
+  box-shadow: 0 32px 54px rgba(1, 8, 20, 0.62);
+}
+
+.el-message-box__header {
+  padding: 22px 24px 0;
+}
+
+.el-message-box__content {
+  padding: 18px 24px 14px;
+}
+
+.el-message-box__message p {
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.el-message-box__status {
+  font-size: 22px !important;
+}
+
+.el-message-box__status.el-icon-warning {
+  color: #ffc766;
+}
+
+.el-message-box__btns {
+  padding: 6px 24px 22px;
+}
+
+.el-message-box__btns .el-button {
+  min-width: 88px;
+  border-radius: 10px;
+}
+
+.v-modal {
+  background: rgba(3, 10, 28, 0.6);
+  backdrop-filter: blur(4px);
 }
 
 /* 全屏 Loading（总览 / 后台），与 ScreenHeader 一致，全局可用 */
+.app-loading-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+}
+
 .screen-dash-loading .el-loading-text {
   color: #5ecfff !important;
   font-size: 16px !important;
+  letter-spacing: 0.08em;
 }
 .screen-dash-loading .el-loading-spinner .path {
   stroke: #5ecfff !important;
+}
+.screen-dash-loading .el-loading-spinner i {
+  color: #5ecfff !important;
+  font-size: 30px !important;
+}
+.screen-dash-loading {
+  backdrop-filter: blur(6px);
 }
 
 /* 全屏 Loading 必须压在侧栏、自定义弹窗、DatePicker 之上 */
 .el-loading-mask.screen-dash-loading {
   z-index: 100000 !important;
+  background: radial-gradient(640px 320px at 20% 10%, rgba(63, 140, 255, 0.18), transparent 45%),
+    radial-gradient(560px 280px at 80% 0%, rgba(51, 197, 201, 0.14), transparent 42%),
+    rgba(3, 10, 28, 0.88) !important;
 }
