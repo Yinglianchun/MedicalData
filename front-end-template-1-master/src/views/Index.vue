@@ -49,7 +49,13 @@
                 <span>患病时长</span>
               </div>
               <div class="case-scroll">
-                <div v-for="(cases, idx) in casesData" :key="idx" class="case-row">
+                <div
+                  v-for="(cases, idx) in casesData"
+                  :key="idx"
+                  class="case-row"
+                  :class="{ active: selectedCaseIndex === idx }"
+                  @click="handleCaseSelect(idx)"
+                >
                   <span>{{ cases[0] }}</span>
                   <span>{{ cases[1] }}</span>
                   <span>{{ cases[2] }}</span>
@@ -139,12 +145,18 @@
         </aside>
       </div>
     </div>
+
+    <AiAssistantBubble
+      :case-text="selectedCaseContent"
+      :case-meta="selectedCaseMeta"
+    />
   </div>
 </template>
 
 <script>
 import $ from "jquery";
 import LeftTop from "@/components/LeftTop.vue";
+import AiAssistantBubble from "@/components/AiAssistantBubble.vue";
 import { color } from "echarts";
 function formatter(number) {
   const numbers = number.toString().split("").reverse();
@@ -161,6 +173,7 @@ export default {
       currentIndex: 0, // 目前的index
       pieData: [], // 接收后端传来的数据
       casesData: [],
+      selectedCaseIndex: 0,
       centerData: {
         maxNum: "",
         maxType: "",
@@ -201,7 +214,32 @@ export default {
       },
     };
   },
+  computed: {
+    selectedCaseRow() {
+      if (!this.casesData.length) {
+        return [];
+      }
+      return this.casesData[this.selectedCaseIndex] || this.casesData[0] || [];
+    },
+    selectedCaseContent() {
+      return this.selectedCaseRow[4] || "";
+    },
+    selectedCaseMeta() {
+      return {
+        id: this.selectedCaseRow[0] || "",
+        type: this.selectedCaseRow[1] || "",
+        gender: this.selectedCaseRow[2] || "",
+        age: this.selectedCaseRow[3] || "",
+        height: this.selectedCaseRow[10] || "",
+        weight: this.selectedCaseRow[11] || "",
+        illDuration: this.selectedCaseRow[12] || "",
+      };
+    },
+  },
   methods: {
+    handleCaseSelect(index) {
+      this.selectedCaseIndex = index;
+    },
     setPieData() {
       $(document).ready(() => {
         var chartDom = this.$refs.firstMain; //通过获取refs的属性来定位div
@@ -572,6 +610,7 @@ export default {
   },
   components: {
     LeftTop,
+    AiAssistantBubble,
   },
 };
 </script>
@@ -749,6 +788,7 @@ export default {
   font-size: var(--fs-12);
   color: var(--text);
   text-align: center;
+  cursor: pointer;
 }
 
 .case-row.head {
@@ -776,6 +816,12 @@ export default {
 
 .case-scroll::-webkit-scrollbar-thumb:hover {
   background: #b7d4f2;
+}
+
+.case-row.active {
+  background: rgba(77, 170, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(84, 204, 255, 0.45);
+  border-radius: 6px;
 }
 
 /* 响应式 */

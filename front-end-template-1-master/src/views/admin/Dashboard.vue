@@ -67,7 +67,12 @@
                           <div>体重</div>
                           <div>患病时长</div>
                         </li>
-                        <li v-for="cases in casesData">
+                        <li
+                          v-for="(cases, index) in casesData"
+                          :key="cases[0] || index"
+                          :class="{ active: selectedCaseIndex === index }"
+                          @click="handleCaseSelect(index)"
+                        >
                           <div>{{ cases[0] }}</div>
                           <div>{{ cases[1] }}</div>
                           <div>{{ cases[2] }}</div>
@@ -176,6 +181,9 @@
         </div>
       </dv-border-box-10>
     </transition>
+    <AiAssistantBubble
+      :chart-actions="chartActions"
+    />
   </div>
 </template>
 
@@ -183,6 +191,7 @@
 import $ from "jquery";
 import LeftTop from "@/components/LeftTop.vue";
 import AppLoading from "@/components/AppLoading.vue";
+import AiAssistantBubble from "@/components/AiAssistantBubble.vue";
 import { color } from "echarts";
 function formatter(number) {
   const numbers = number.toString().split("").reverse();
@@ -199,6 +208,7 @@ export default {
       currentIndex: 0, // 目前的index
       pieData: [], // 接收后端传来的数据
       casesData: [],
+      selectedCaseIndex: 0,
       centerData: {
         maxNum: "",
         maxType: "",
@@ -239,7 +249,57 @@ export default {
       },
     };
   },
+  computed: {
+    selectedCaseRow() {
+      if (!this.casesData.length) {
+        return [];
+      }
+      return this.casesData[this.selectedCaseIndex] || this.casesData[0] || [];
+    },
+    selectedCaseContent() {
+      return this.selectedCaseRow[4] || "";
+    },
+    selectedCaseMeta() {
+      return {
+        id: this.selectedCaseRow[0] || "",
+        type: this.selectedCaseRow[1] || "",
+        gender: this.selectedCaseRow[2] || "",
+        age: this.selectedCaseRow[3] || "",
+        height: this.selectedCaseRow[10] || "",
+        weight: this.selectedCaseRow[11] || "",
+        illDuration: this.selectedCaseRow[12] || "",
+      };
+    },
+    chartActions() {
+      return [
+        {
+          key: 'age-distribution',
+          label: '分析各年龄段患病占比',
+          title: '各年龄段患病占比',
+          type: '年龄分布图',
+          data: this.pieData,
+        },
+        {
+          key: 'disease-distribution',
+          label: '分析疾病类型分布',
+          title: '疾病类型分布',
+          type: '疾病类型分布图',
+          data: this.config1.data,
+        },
+        {
+          key: 'department-distribution',
+          label: '分析医院科室环形图',
+          title: '医院科室环形图',
+          type: '科室活跃度分布图',
+          data: this.circleData.slice(0, 5),
+        },
+      ];
+    },
+  },
   methods: {
+    handleCaseSelect(index) {
+      this.selectedCaseIndex = index;
+    },
     setPieData() {
       $(document).ready(() => {
         var chartDom = this.$refs.firstMain; //通过获取refs的属性来定位div
@@ -611,6 +671,7 @@ export default {
   components: {
     LeftTop,
     AppLoading,
+    AiAssistantBubble,
   },
 };
 </script>
@@ -814,6 +875,12 @@ export default {
   text-align: center;
   line-height: 30px;
   color: rgb(238, 236, 236);
+}
+
+.cases_list li.active {
+  background: rgba(77, 170, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(84, 204, 255, 0.45);
+  border-radius: 6px;
 }
 
 .list_time {

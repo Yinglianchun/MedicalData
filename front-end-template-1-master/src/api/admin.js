@@ -151,6 +151,16 @@ export function submitPrediction(content, options = {}) {
   })
 }
 
+// ========== 用户/管理员 - AI 助手 ==========
+export function aiAssistant(payload) {
+  return request({
+    url: '/ai/assistant',
+    method: 'post',
+    timeout: 60000,
+    data: payload
+  })
+}
+
 // ========== 管理员 - 模型训练 ==========
 // 手动重训模型，可选对比结果
 export function adminRetrainModel(payload = {}) {

@@ -1,3 +1,7 @@
+import os
+import json
+
+import requests
 from flask import Flask,request,jsonify,session
 from utils.getAllData import *
 
@@ -14,6 +18,26 @@ from flask_cors import CORS
 from functools import wraps
 
 
+def _load_local_env():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, 'r', encoding='utf-8') as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
+
+
+_load_local_env()
+
 app = Flask(__name__)
 # 配置CORS，允许携带凭证（cookie/session）
 # 开发时 Vue 可能是 localhost 或 127.0.0.1、不同端口；带 cookie 时必须逐项列出 origin
@@ -28,6 +52,71 @@ CORS(
     ],
 )
 app.secret_key = "medicaldata-secret-key"
+
+
+def _trim_text(value, max_len=4000):
+    if value is None:
+        return ''
+    return str(value).strip()[:max_len]
+
+
+def _resolve_qwen_api_url():
+    api_url = (
+        os.getenv('QWEN_API_URL')
+        or os.getenv('OPENAI_API_URL')
+        or os.getenv('OPENAI_BASE_URL')
+        or os.getenv('NEWAPI_BASE_URL')
+        or ''
+    ).strip()
+
+    if not api_url:
+        raise ValueError('未配置 AI 接口地址，请在 .env 中设置 QWEN_API_URL 或 OPENAI_API_URL')
+
+    if api_url.endswith('/v1'):
+        return f'{api_url}/chat/completions'
+    if api_url.endswith('/v1/'):
+        return f'{api_url}chat/completions'
+    return api_url
+
+
+def _call_qwen_chat(system_prompt, user_prompt):
+    api_key = (
+        os.getenv('DASHSCOPE_API_KEY')
+        or os.getenv('QWEN_API_KEY')
+        or os.getenv('OPENAI_API_KEY')
+        or os.getenv('NEWAPI_API_KEY')
+    )
+    if not api_key:
+        raise ValueError('未配置 AI API Key，请在后端环境变量中设置 DASHSCOPE_API_KEY、QWEN_API_KEY 或 OPENAI_API_KEY')
+
+    model = os.getenv('QWEN_MODEL', 'qwen3.5-plus')
+    api_url = _resolve_qwen_api_url()
+    response = requests.post(
+        api_url,
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt}
+            ],
+            'temperature': 0.4
+        },
+        timeout=int(os.getenv('AI_HTTP_TIMEOUT', '90'))
+    )
+    response.raise_for_status()
+    data = response.json()
+    choices = data.get('choices') or []
+    if not choices:
+        raise ValueError('千问接口未返回有效内容')
+    message = choices[0].get('message') or {}
+    content = message.get('content')
+    if not content:
+        raise ValueError('千问接口返回内容为空')
+    return content
 
 
 def login_required(func):
@@ -605,6 +694,104 @@ def admin_model_data_stats():
         return jsonify({'message': 'success', 'code': 200, 'data': stats})
     except Exception as e:
         return jsonify({'message': f'获取数据来源统计失败: {e}', 'code': 500, 'data': None}), 500
+
+
+@app.route('/ai/assistant', methods=['POST'])
+@login_required
+def ai_assistant():
+    payload = request.get_json(silent=True) or {}
+    task = _trim_text(payload.get('task'), 40)
+    symptom_text = _trim_text(payload.get('symptom_text'))
+    prediction_result = _trim_text(payload.get('prediction_result'), 1000)
+    case_text = _trim_text(payload.get('case_text'))
+    case_meta = payload.get('case_meta') if isinstance(payload.get('case_meta'), dict) else {}
+    chart_title = _trim_text(payload.get('chart_title'), 100)
+    chart_type = _trim_text(payload.get('chart_type'), 100)
+    chart_data = payload.get('chart_data') if isinstance(payload.get('chart_data'), list) else []
+
+    if task not in ('explain_prediction', 'summarize_case', 'analyze_chart'):
+        return jsonify({'message': '不支持的 AI 任务类型', 'code': 400, 'data': None}), 400
+
+    try:
+        if task == 'explain_prediction':
+            if not prediction_result:
+                return jsonify({'message': '缺少预测结果，无法解释', 'code': 400, 'data': None}), 400
+
+            system_prompt = (
+                '你是医疗数据分析系统中的 AI 助手。'
+                '你的职责是解释系统预测结果，帮助用户理解，不得把自己表述为医生。'
+                '不要给出明确诊断结论，不要开药，不要夸大确定性。'
+                '回答要简洁、自然，控制在4点以内，并明确提醒“仅供参考，需结合医生诊断”。'
+            )
+            user_prompt = (
+                f'用户输入的症状描述：{symptom_text or "未提供"}\n'
+                f'系统预测结果：{prediction_result}\n'
+                '请输出：1. 这个结果可能意味着什么；2. 结果为什么只能作为参考；'
+                '3. 用户下一步可以关注哪些症状或检查方向。'
+            )
+        elif task == 'summarize_case':
+            if not case_text:
+                return jsonify({'message': '缺少病例文本，无法总结', 'code': 400, 'data': None}), 400
+
+            meta_parts = []
+            for label, key in (
+                ('编号', 'id'),
+                ('疾病类型', 'type'),
+                ('性别', 'gender'),
+                ('年龄', 'age'),
+                ('患病时长', 'illDuration'),
+                ('医院', 'docHospital'),
+                ('科室', 'department'),
+            ):
+                value = _trim_text(case_meta.get(key), 200)
+                if value:
+                    meta_parts.append(f'{label}：{value}')
+
+            system_prompt = (
+                '你是医疗数据分析系统中的 AI 助手。'
+                '你的职责是总结病例文本，方便用户快速阅读。'
+                '不要虚构原文没有的信息，不要输出诊断建议。'
+                '请用简洁中文输出，分成“症状概述”“关键信息”“就诊建议”三部分，'
+                '其中“就诊建议”只能写通用性的下一步关注点，不能代替医生意见。'
+            )
+            user_prompt = (
+                f'病例基础信息：{"；".join(meta_parts) if meta_parts else "无"}\n'
+                f'病例文本：{case_text}\n'
+                '请基于以上内容生成简明总结。'
+            )
+        else:
+            if not chart_title or not chart_data:
+                return jsonify({'message': '缺少图表标题或图表数据，无法分析', 'code': 400, 'data': None}), 400
+
+            system_prompt = (
+                '你是医疗数据可视化分析系统中的 AI 助手。'
+                '你的职责是解读图表数据，帮助用户快速理解分布、集中趋势和关注重点。'
+                '不要把图表解读成医学诊断，不要虚构图表中不存在的信息。'
+                '如果图表与医院科室相关但未提供明确的空闲率指标，请使用“活跃度”“分布”“热度”表述，'
+                '不要直接下结论为“空闲程度”。'
+                '输出控制在3点以内，每点简洁自然。'
+            )
+            user_prompt = (
+                f'图表标题：{chart_title}\n'
+                f'图表类型：{chart_type or "统计图表"}\n'
+                f'图表数据：{json.dumps(chart_data, ensure_ascii=False)}\n'
+                '请输出：1. 图表主要结论；2. 数据分布特征；3. 值得关注的点。'
+            )
+
+        content = _call_qwen_chat(system_prompt, user_prompt)
+        return jsonify({
+            'message': 'success',
+            'code': 200,
+            'data': {
+                'task': task,
+                'content': content
+            }
+        })
+    except requests.HTTPError as e:
+        detail = e.response.text[:500] if e.response is not None and e.response.text else str(e)
+        return jsonify({'message': f'调用千问接口失败: {detail}', 'code': 500, 'data': None}), 500
+    except Exception as e:
+        return jsonify({'message': f'AI 助手调用失败: {e}', 'code': 500, 'data': None}), 500
 
 
 

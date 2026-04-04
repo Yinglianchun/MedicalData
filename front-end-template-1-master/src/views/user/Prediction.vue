@@ -86,6 +86,13 @@
         </section>
       </aside>
     </section>
+
+    <AiAssistantBubble
+      :symptom-text="symptomInput"
+      :prediction-result="predictionResult"
+      :case-text="symptomInput"
+      :case-meta="{ type: predictionResult || '待预测病例' }"
+    />
   </div>
 </template>
 
@@ -93,11 +100,13 @@
 import { submitPrediction as predictRequest } from '@/api/admin'
 import logoImg from '@/assets/logo.png'
 import AppLoading from '@/components/AppLoading.vue'
+import AiAssistantBubble from '@/components/AiAssistantBubble.vue'
 
 export default {
   name: 'Prediction',
   components: {
-    AppLoading
+    AppLoading,
+    AiAssistantBubble
   },
   data() {
     return {
