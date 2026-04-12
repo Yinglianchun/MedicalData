@@ -1,0 +1,8 @@
+﻿D:\MedicalData\参考文献\绪论、研究现状\国内外医疗数据可视化研究的现状分析与展望.pdf
+D:\MedicalData\参考文献\绪论、研究现状\国内外医疗数据共享研究的可视化分析_张萌.pdf
+D:\MedicalData\参考文献\绪论、研究现状\医疗检测大数据分析及其可视化_张伦裕.pdf
+D:\MedicalData\参考文献\系统与技术\医疗数据可视化分析研究及其应用_王彤.pdf
+D:\MedicalData\参考文献\AI与大模型\A Review on Large Language Models for Visual.pdf
+D:\MedicalData\参考文献\AI与大模型\ChartInstruct Instruction Tuning for Chart Comprehension and.pdf
+D:\MedicalData\参考文献\AI与大模型\医疗大模型发展现状与展望.pdf
+D:\MedicalData\参考文献\AI与大模型\应用大语言模型深化临床辅助决策支持系统建设实践.pdf
