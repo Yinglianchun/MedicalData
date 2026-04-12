@@ -14,7 +14,7 @@
 
       <div class="mode-card">
         <span class="mode-label">预测模式</span>
-        <el-radio-group v-model="predictRealOnly" size="mini">
+        <el-radio-group v-model="predictRealOnly" size="mini" class="mode-switch">
           <el-radio-button :label="false">真实 + 合成</el-radio-button>
           <el-radio-button :label="true">仅真实</el-radio-button>
         </el-radio-group>
@@ -45,7 +45,7 @@
           <p class="editor-tip">结果仅用于课程演示与参考，不可替代专业问诊。</p>
           <button
             type="submit"
-            class="submit-btn"
+            class="submit-btn glass-btn glass-btn--primary"
             :disabled="loading || !symptomInput.trim()"
           >
             {{ loading ? '分析中...' : '提交预测' }}
@@ -60,7 +60,7 @@
           </div>
           <p class="note-copy">
             这里展示的预测结果仅有参考价值，如有身体不适请尽快就医。当前模型：
-            <strong>{{ resultModelText }}</strong>
+            <strong>{{ currentModelText }}</strong>。当前模型仅支持 10 类病种分类，若症状涉及多个系统或超出训练范围，结果可能出现偏差。
           </p>
         </section>
 
@@ -78,6 +78,12 @@
             <span class="result-state">{{ hasResult ? '分析完成' : '等待提交' }}</span>
             <div class="result-value">{{ displayResult }}</div>
           </div>
+          <ul v-if="topPredictions.length" class="top-predictions">
+            <li v-for="item in topPredictions" :key="item.label" class="top-predictions__item">
+              <span class="top-predictions__label">{{ item.label }}</span>
+              <strong class="top-predictions__value">{{ item.percent }}</strong>
+            </li>
+          </ul>
         </section>
 
         <section v-if="historyCount > 0" class="history-panel glass-card">
@@ -113,17 +119,20 @@ export default {
       logoImg,
       symptomInput: '',
       predictionResult: '',
+      topPredictions: [],
       hasResult: false,
       loading: false,
       historyCount: 0,
-      predictRealOnly: false,
-      resultModelText: '真实 + 合成'
+      predictRealOnly: false
     }
   },
   computed: {
     displayResult() {
       if (this.hasResult && this.predictionResult) return this.predictionResult
       return '提交后在此显示'
+    },
+    currentModelText() {
+      return this.predictRealOnly ? '仅真实' : '真实 + 合成'
     },
     symptomLength() {
       return this.symptomInput.trim().length
@@ -139,6 +148,7 @@ export default {
 
       this.loading = true
       this.hasResult = false
+      this.topPredictions = []
 
       try {
         const res = await predictRequest(content, {
@@ -147,14 +157,16 @@ export default {
 
         if (res.code === 200) {
           this.predictionResult = res.data.resultData || '未知'
-          this.resultModelText = res.data.modelMode === 'real_only' ? '仅真实' : '真实 + 合成'
+          this.topPredictions = res.data.topPredictions || []
           this.hasResult = true
           this.historyCount += 1
         } else {
+          this.topPredictions = []
           this.$message.error(res.message || '预测失败')
         }
       } catch (error) {
         console.error('预测失败:', error)
+        this.topPredictions = []
         this.$message.error(`预测失败：${error.message || '请检查网络连接'}`)
       } finally {
         this.loading = false
@@ -233,6 +245,61 @@ export default {
   margin-bottom: 10px;
   color: #9fb6d4;
   font-size: 13px;
+}
+
+.mode-switch {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(104, 170, 238, 0.16);
+  background:
+    linear-gradient(180deg, rgba(153, 191, 233, 0.07), rgba(45, 85, 148, 0.05)),
+    rgba(10, 24, 51, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 16px rgba(3, 11, 30, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mode-switch ::v-deep .el-radio-button__inner {
+  min-width: 88px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #9fbce0;
+  font-weight: 600;
+  box-shadow: none;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.mode-switch ::v-deep .el-radio-button:first-child .el-radio-button__inner,
+.mode-switch ::v-deep .el-radio-button:last-child .el-radio-button__inner {
+  border-radius: 10px;
+}
+
+.mode-switch ::v-deep .el-radio-button__orig-radio:checked + .el-radio-button__inner {
+  background:
+    linear-gradient(180deg, rgba(128, 191, 248, 0.18), rgba(68, 126, 204, 0.14)),
+    rgba(14, 37, 79, 0.78);
+  color: #e7f1ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 16px rgba(6, 18, 42, 0.18);
+}
+
+.mode-switch ::v-deep .el-radio-button__orig-radio:checked + .el-radio-button__inner:hover {
+  transform: none;
+}
+
+.mode-switch ::v-deep .el-radio-button__inner:hover {
+  color: #d1e4fb;
+  background: rgba(96, 155, 230, 0.07);
 }
 
 .prediction-grid {
@@ -329,27 +396,10 @@ export default {
 
 .submit-btn {
   min-width: 168px;
-  padding: 14px 22px;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2f80ed, #33c5c9);
-  color: #04111f;
+  height: 46px;
+  padding: 0 24px;
   font-size: 15px;
   font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-}
-
-.submit-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 18px 28px rgba(7, 20, 38, 0.34);
-  filter: brightness(1.03);
-}
-
-.submit-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.58;
-  box-shadow: none;
 }
 
 .result-column {
@@ -404,6 +454,33 @@ export default {
   font-weight: 700;
   color: #edf6ff;
   word-break: break-word;
+}
+
+.top-predictions {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.top-predictions__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(14, 25, 47, 0.82);
+  border: 1px solid rgba(110, 200, 255, 0.14);
+}
+
+.top-predictions__label {
+  color: #cfe0fb;
+}
+
+.top-predictions__value {
+  color: #6ec8ff;
 }
 
 .history-panel {

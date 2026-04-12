@@ -47,7 +47,7 @@ def evaluate_with_fixed_test(train_df, test_df):
     vectorizer = TfidfVectorizer(max_features=10000)
     x_train_vectorizer = vectorizer.fit_transform(train_df['content'])
     x_test_vectorizer = vectorizer.transform(test_df['content'])
-
+# 200棵决策树，随机种子42，类别不平衡时自动调整权重
     model = RandomForestClassifier(n_estimators=200, random_state=42, class_weight='balanced')
     model.fit(x_train_vectorizer, train_df['type'])
     y_pred = model.predict(x_test_vectorizer)

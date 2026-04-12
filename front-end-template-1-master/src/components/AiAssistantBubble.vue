@@ -13,12 +13,13 @@
     >
       <div class="ai-panel">
         <div class="ai-intro">
-          可用于解释预测结果、分析当前图表。内容仅供参考，不替代医生诊断或正式业务决策。
+          可用于解释预测结果、分析当前图表，并给出参考性的挂号方向。内容仅供参考，不替代医生诊断或正式业务决策。
         </div>
 
         <div class="quick-actions">
           <el-button
             v-if="canExplainPrediction"
+            class="action-chip"
             size="mini"
             type="primary"
             plain
@@ -30,6 +31,7 @@
           <el-button
             v-for="action in availableChartActions"
             :key="action.key || action.label"
+            class="action-chip"
             size="mini"
             type="primary"
             plain
@@ -45,14 +47,13 @@
           <div>图表分析：{{ availableChartActions.length ? `可分析 ${availableChartActions.length} 项` : '暂无可分析图表' }}</div>
         </div>
 
-        <div v-if="loading" class="loading-box">
-          <i class="el-icon-loading"></i>
-          <span>AI 正在整理内容...</span>
-        </div>
-
-        <div v-else class="result-box">
+        <div class="result-box">
           <div class="result-title">{{ resultTitle }}</div>
-          <div class="result-content">{{ resultContent || '点击上方按钮开始使用 AI 助手。' }}</div>
+          <div v-if="loading" class="loading-box">
+            <i class="el-icon-loading"></i>
+            <span>{{ streamStatus }}</span>
+          </div>
+          <div class="result-content">{{ displayResultContent }}</div>
         </div>
       </div>
     </el-dialog>
@@ -60,8 +61,6 @@
 </template>
 
 <script>
-import { aiAssistant } from '@/api/admin'
-
 export default {
   name: 'AiAssistantBubble',
   props: {
@@ -83,7 +82,9 @@ export default {
       dialogVisible: false,
       loading: false,
       resultTitle: 'AI 回复',
-      resultContent: ''
+      resultContent: '',
+      streamStatus: 'AI 正在连接模型...',
+      streamController: null
     }
   },
   computed: {
@@ -94,7 +95,26 @@ export default {
       return (this.chartActions || []).filter((item) => {
         return item && item.label && Array.isArray(item.data) && item.data.length
       })
+    },
+    displayResultContent() {
+      if (this.resultContent) {
+        return this.resultContent
+      }
+      if (this.loading) {
+        return '正在等待模型返回内容...'
+      }
+      return '点击上方按钮开始使用 AI 助手。'
     }
+  },
+  watch: {
+    dialogVisible(value) {
+      if (!value) {
+        this.abortActiveStream()
+      }
+    }
+  },
+  beforeDestroy() {
+    this.abortActiveStream()
   },
   methods: {
     async runExplainPrediction() {
@@ -115,29 +135,142 @@ export default {
         chart_data: action.data
       })
     },
+    abortActiveStream() {
+      if (this.streamController) {
+        this.streamController.abort()
+        this.streamController = null
+      }
+      this.loading = false
+    },
+    parseStreamBlock(block) {
+      const lines = block.split('\n')
+      let eventName = 'message'
+      const dataLines = []
+
+      lines.forEach((line) => {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim())
+        }
+      })
+
+      if (!dataLines.length) {
+        return null
+      }
+
+      return {
+        eventName,
+        payload: JSON.parse(dataLines.join('\n'))
+      }
+    },
+    handleStreamEvent(eventName, payload) {
+      if (eventName === 'status') {
+        this.streamStatus = payload.message || 'AI 正在思考，请稍等...'
+        return
+      }
+
+      if (eventName === 'message') {
+        if (payload.content) {
+          this.resultContent += payload.content
+          this.streamStatus = 'AI 正在生成内容...'
+        }
+        return
+      }
+
+      if (eventName === 'done') {
+        this.streamStatus = '生成完成'
+        return
+      }
+
+      if (eventName === 'error') {
+        throw new Error(payload.message || 'AI 流式请求失败')
+      }
+    },
     async requestAi(task, title, extraPayload = {}) {
+      this.abortActiveStream()
       this.loading = true
       this.resultTitle = title
+      this.resultContent = ''
+      this.streamStatus = 'AI 正在连接模型...'
+
+      const controller = new AbortController()
+      this.streamController = controller
+
       try {
-        const res = await aiAssistant({
-          task,
-          symptom_text: this.symptomText,
-          prediction_result: this.predictionResult,
-          ...extraPayload
+        const response = await fetch('/api/ai/assistant/stream', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            task,
+            symptom_text: this.symptomText,
+            prediction_result: this.predictionResult,
+            ...extraPayload
+          }),
+          signal: controller.signal
         })
-        if (res.code === 200 && res.data) {
-          this.resultContent = res.data.content || 'AI 未返回有效内容'
-        } else {
-          this.$message.error(res.message || 'AI 请求失败')
+
+        if (!response.ok) {
+          let message = 'AI 请求失败'
+          try {
+            const errorData = await response.json()
+            message = errorData.message || message
+          } catch (parseError) {
+            const text = await response.text()
+            if (text) {
+              message = text
+            }
+          }
+          throw new Error(message)
+        }
+
+        if (!response.body) {
+          throw new Error('当前浏览器不支持流式响应')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            break
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+
+          while (buffer.includes('\n\n')) {
+            const boundary = buffer.indexOf('\n\n')
+            const block = buffer.slice(0, boundary)
+            buffer = buffer.slice(boundary + 2)
+            const parsed = this.parseStreamBlock(block)
+            if (parsed) {
+              this.handleStreamEvent(parsed.eventName, parsed.payload)
+            }
+          }
+        }
+
+        if (buffer.trim()) {
+          const parsed = this.parseStreamBlock(buffer)
+          if (parsed) {
+            this.handleStreamEvent(parsed.eventName, parsed.payload)
+          }
         }
       } catch (error) {
-        console.error('AI 请求失败:', error)
-        const message =
-          (error && error.response && error.response.data && error.response.data.message) ||
-          (error && error.message) ||
-          '请检查后端接口和 API 配置'
+        if (error && error.name === 'AbortError') {
+          return
+        }
+        console.error('AI 流式请求失败:', error)
+        const message = (error && error.message) || '请检查后端接口和 API 配置'
         this.$message.error(`AI 请求失败：${message}`)
       } finally {
+        if (this.streamController === controller) {
+          this.streamController = null
+        }
         this.loading = false
       }
     }
@@ -199,9 +332,84 @@ export default {
 
 .quick-actions {
   margin-top: 16px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(23, 46, 96, 0.34), rgba(8, 18, 45, 0.18));
+  border: 1px solid rgba(94, 151, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(173, 222, 255, 0.08),
+    inset 0 -1px 0 rgba(7, 21, 58, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.quick-actions ::v-deep .action-chip.el-button {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  margin: 0;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 199, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(198, 232, 255, 0.14), rgba(63, 120, 205, 0.08)),
+    rgba(10, 26, 59, 0.42);
+  color: #cbe8ff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 18px rgba(3, 11, 30, 0.18);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.quick-actions ::v-deep .action-chip.el-button:hover,
+.quick-actions ::v-deep .action-chip.el-button:focus {
+  transform: translateY(-1px);
+  border-color: rgba(112, 217, 255, 0.42);
+  background:
+    linear-gradient(180deg, rgba(185, 241, 255, 0.2), rgba(76, 146, 255, 0.12)),
+    rgba(11, 31, 69, 0.58);
+  color: #eff8ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 14px 24px rgba(5, 15, 41, 0.24),
+    0 0 0 1px rgba(88, 191, 255, 0.08);
+}
+
+.quick-actions ::v-deep .action-chip.el-button:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 14px rgba(5, 15, 41, 0.22);
+}
+
+.quick-actions ::v-deep .action-chip.el-button.is-disabled,
+.quick-actions ::v-deep .action-chip.el-button.is-disabled:hover,
+.quick-actions ::v-deep .action-chip.el-button.is-disabled:focus {
+  transform: none;
+  border-color: rgba(113, 143, 198, 0.16);
+  background:
+    linear-gradient(180deg, rgba(126, 160, 211, 0.08), rgba(40, 65, 110, 0.08)),
+    rgba(10, 22, 45, 0.3);
+  color: rgba(167, 193, 224, 0.52);
+  box-shadow: none;
 }
 
 .status-box {
@@ -215,7 +423,7 @@ export default {
 }
 
 .loading-box {
-  margin-top: 18px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -243,5 +451,11 @@ export default {
   line-height: 1.8;
   color: #dbe7ff;
   font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  .quick-actions {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

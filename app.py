@@ -1,8 +1,9 @@
 import os
 import json
+import codecs
 
 import requests
-from flask import Flask,request,jsonify,session
+from flask import Flask,request,jsonify,session,Response,stream_with_context
 from utils.getAllData import *
 
 from machine.pred import (
@@ -79,7 +80,29 @@ def _resolve_qwen_api_url():
     return api_url
 
 
-def _call_qwen_chat(system_prompt, user_prompt):
+class AIRequestValidationError(ValueError):
+    def __init__(self, message, status_code=400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _extract_text_content(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get('text') or item.get('content')
+                if text:
+                    parts.append(str(text))
+        return ''.join(parts)
+    return ''
+
+
+def _get_qwen_api_config():
     api_key = (
         os.getenv('DASHSCOPE_API_KEY')
         or os.getenv('QWEN_API_KEY')
@@ -91,6 +114,111 @@ def _call_qwen_chat(system_prompt, user_prompt):
 
     model = os.getenv('QWEN_MODEL', 'qwen3.5-plus')
     api_url = _resolve_qwen_api_url()
+    timeout = int(os.getenv('AI_HTTP_TIMEOUT', '90'))
+    return api_key, model, api_url, timeout
+
+
+def _build_ai_prompts(payload):
+    task = _trim_text(payload.get('task'), 40)
+    symptom_text = _trim_text(payload.get('symptom_text'))
+    prediction_result = _trim_text(payload.get('prediction_result'), 1000)
+    case_text = _trim_text(payload.get('case_text'))
+    case_meta = payload.get('case_meta') if isinstance(payload.get('case_meta'), dict) else {}
+    chart_title = _trim_text(payload.get('chart_title'), 100)
+    chart_type = _trim_text(payload.get('chart_type'), 100)
+    chart_data = payload.get('chart_data') if isinstance(payload.get('chart_data'), list) else []
+
+    if task not in ('explain_prediction', 'summarize_case', 'analyze_chart'):
+        raise AIRequestValidationError('不支持的 AI 任务类型')
+
+    if task == 'explain_prediction':
+        if not prediction_result:
+            raise AIRequestValidationError('缺少预测结果，无法解释')
+
+        system_prompt = (
+            '你是医疗数据分析系统中的 AI 助手。'
+            '你的职责是解释系统预测结果，帮助用户理解，不得把自己表述为医生。'
+            '当前模型只支持有限病种分类，跨系统症状、开放场景症状或超出训练分布的输入，可能导致预测偏差。'
+            '你必须先结合用户原始症状描述，判断症状与预测结果是否一致。'
+            '如果症状与预测结果存在明显跨系统冲突，或预测结果看起来不够合理，必须明确提醒“该结果可能失真，仅供参考”，不能顺着预测结果做肯定式展开。'
+            '不要给出明确诊断结论，不要开药，不要夸大确定性。'
+            '请补充1到2个建议优先咨询的就诊科室或挂号方向，但必须写明这只是参考建议。'
+            '回答要简洁、自然，控制在4点以内，并明确提醒“仅供参考，需结合医生诊断”。'
+            '只能输出纯文本，不要使用 Markdown，不要使用标题、星号、减号、反引号、代码块、表格。'
+            '如需分点，请使用“1. 2. 3. 4.”这种普通文本编号。'
+        )
+        user_prompt = (
+            f'用户输入的症状描述：{symptom_text or "未提供"}\n'
+            f'系统预测结果：{prediction_result}\n'
+            '请先判断“症状描述”和“预测结果”是否基本一致。'
+            '若不一致，请先指出模型可能因病种范围有限或跨系统症状而出现偏差。'
+            '请输出：1. 症状与预测结果是否一致；2. 这个结果最多可能提示什么；3. 为什么结果只能作为参考；'
+            '4. 建议优先咨询的就诊科室或挂号方向，以及用户下一步可关注的症状或检查方向。'
+        )
+        return task, system_prompt, user_prompt
+
+    if task == 'summarize_case':
+        if not case_text:
+            raise AIRequestValidationError('缺少病例文本，无法总结')
+
+        meta_parts = []
+        for label, key in (
+            ('编号', 'id'),
+            ('疾病类型', 'type'),
+            ('性别', 'gender'),
+            ('年龄', 'age'),
+            ('患病时长', 'illDuration'),
+            ('医院', 'docHospital'),
+            ('科室', 'department'),
+        ):
+            value = _trim_text(case_meta.get(key), 200)
+            if value:
+                meta_parts.append(f'{label}：{value}')
+
+        system_prompt = (
+            '你是医疗数据分析系统中的 AI 助手。'
+            '你的职责是总结病例文本，方便用户快速阅读。'
+            '不要虚构原文没有的信息，不要输出诊断建议。'
+            '请用简洁中文输出，分成“症状概述”“关键信息”“建议挂号方向”“就诊建议”四部分，'
+            '其中“建议挂号方向”只能写参考性的就诊科室建议，“就诊建议”只能写通用性的下一步关注点，不能代替医生意见。'
+            '只能输出纯文本，不要使用 Markdown，不要使用标题符号、星号、减号、反引号、代码块、表格。'
+            '如需分点，请使用“1. 2. 3. 4.”这种普通文本编号。'
+        )
+        user_prompt = (
+            f'病例基础信息：{"；".join(meta_parts) if meta_parts else "无"}\n'
+            f'病例文本：{case_text}\n'
+            '请基于以上内容生成简明总结。'
+        )
+        return task, system_prompt, user_prompt
+
+    if not chart_title or not chart_data:
+        raise AIRequestValidationError('缺少图表标题或图表数据，无法分析')
+
+    system_prompt = (
+        '你是医疗数据可视化分析系统中的 AI 助手。'
+        '你的职责是解读图表数据，帮助用户快速理解分布、集中趋势和关注重点。'
+        '不要把图表解读成医学诊断，不要虚构图表中不存在的信息。'
+        '如果图表与医院科室相关但未提供明确的空闲率指标，请使用“活跃度”“分布”“热度”表述，'
+        '不要直接下结论为“空闲程度”。'
+        '输出控制在3点以内，每点简洁自然。'
+        '只能输出纯文本，不要使用 Markdown，不要使用标题、星号、减号、反引号、代码块、表格。'
+        '如需分点，请使用“1. 2. 3.”这种普通文本编号。'
+    )
+    user_prompt = (
+        f'图表标题：{chart_title}\n'
+        f'图表类型：{chart_type or "统计图表"}\n'
+        f'图表数据：{json.dumps(chart_data, ensure_ascii=False)}\n'
+        '请输出：1. 图表主要结论；2. 数据分布特征；3. 值得关注的点。'
+    )
+    return task, system_prompt, user_prompt
+
+
+def _format_sse(event_name, payload):
+    return f'event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n'
+
+
+def _call_qwen_chat(system_prompt, user_prompt):
+    api_key, model, api_url, timeout = _get_qwen_api_config()
     response = requests.post(
         api_url,
         headers={
@@ -105,7 +233,7 @@ def _call_qwen_chat(system_prompt, user_prompt):
             ],
             'temperature': 0.4
         },
-        timeout=int(os.getenv('AI_HTTP_TIMEOUT', '90'))
+        timeout=timeout
     )
     response.raise_for_status()
     data = response.json()
@@ -113,10 +241,107 @@ def _call_qwen_chat(system_prompt, user_prompt):
     if not choices:
         raise ValueError('千问接口未返回有效内容')
     message = choices[0].get('message') or {}
-    content = message.get('content')
+    content = _extract_text_content(message.get('content'))
     if not content:
         raise ValueError('千问接口返回内容为空')
     return content
+
+
+def _stream_qwen_chat(system_prompt, user_prompt):
+    api_key, model, api_url, timeout = _get_qwen_api_config()
+    response = requests.post(
+        api_url,
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt}
+            ],
+            'temperature': 0.4,
+            'stream': True
+        },
+        stream=True,
+        timeout=timeout
+    )
+    response.raise_for_status()
+
+    content_type = (response.headers.get('content-type') or '').lower()
+    if 'text/event-stream' not in content_type:
+        data = response.json()
+        choices = data.get('choices') or []
+        if not choices:
+            raise ValueError('千问接口未返回有效内容')
+        message = choices[0].get('message') or {}
+        content = _extract_text_content(message.get('content'))
+        if content:
+            yield 'message', {'content': content}
+        yield 'done', {'done': True}
+        return
+
+    status_sent = False
+    done_sent = False
+
+    buffer = ''
+    utf8_decoder = codecs.getincrementaldecoder('utf-8')()
+    for raw_chunk in response.iter_content(chunk_size=None, decode_unicode=False):
+        if not raw_chunk:
+            continue
+
+        buffer += utf8_decoder.decode(raw_chunk).replace('\r\n', '\n')
+        while '\n\n' in buffer:
+            block, buffer = buffer.split('\n\n', 1)
+            lines = block.split('\n')
+            data_lines = []
+            for raw_line in lines:
+                line = raw_line.strip()
+                if not line or line.startswith(':'):
+                    continue
+                if line.startswith('data:'):
+                    data_lines.append(line[5:].strip())
+
+            if not data_lines:
+                continue
+
+            payload_text = '\n'.join(data_lines).strip()
+            if payload_text == '[DONE]':
+                if not done_sent:
+                    done_sent = True
+                    yield 'done', {'done': True}
+                break
+
+            payload = json.loads(payload_text)
+            choices = payload.get('choices') or []
+            if not choices:
+                continue
+
+            choice = choices[0]
+            delta = choice.get('delta') or {}
+            content_piece = _extract_text_content(delta.get('content'))
+
+            if content_piece:
+                yield 'message', {'content': content_piece}
+                continue
+
+            if delta.get('reasoning_content') and not status_sent:
+                status_sent = True
+                yield 'status', {'stage': 'thinking', 'message': 'AI 正在思考，请稍等...'}
+
+            if choice.get('finish_reason') and not done_sent:
+                done_sent = True
+                yield 'done', {'done': True}
+                break
+
+        if done_sent:
+            break
+
+    buffer += utf8_decoder.decode(b'', final=True).replace('\r\n', '\n')
+
+    if not done_sent:
+        yield 'done', {'done': True}
 
 
 def login_required(func):
@@ -620,7 +845,8 @@ def submitModel():
         content = payload.get('content', '')
         real_only = to_bool(payload.get('real_only'), False)
         model = get_or_train_model(real_only=real_only)
-        result = pred(model, content)
+        prediction_payload = pred(model, content)
+        result_label = prediction_payload['label']
 
         # 如果当前有登录用户，则把预测记录写入 pred_records
         user_id = session.get('user_id')
@@ -629,7 +855,7 @@ def submitModel():
                 querys(
                     'insert into pred_records (user_id,input_content,pred_result,create_time) '
                     'values (%s,%s,%s,now())',
-                    [user_id, content, result]
+                    [user_id, content, result_label]
                 )
             except Exception as e:
                 print("save pred_records error:", e)
@@ -638,7 +864,8 @@ def submitModel():
             'message': 'success',
             'code': 200,
             'data': {
-                'resultData': result,
+                'resultData': result_label,
+                'topPredictions': prediction_payload['top_predictions'],
                 'modelMode': 'real_only' if real_only else 'real_plus_synthetic'
             }
         })
@@ -700,84 +927,9 @@ def admin_model_data_stats():
 @login_required
 def ai_assistant():
     payload = request.get_json(silent=True) or {}
-    task = _trim_text(payload.get('task'), 40)
-    symptom_text = _trim_text(payload.get('symptom_text'))
-    prediction_result = _trim_text(payload.get('prediction_result'), 1000)
-    case_text = _trim_text(payload.get('case_text'))
-    case_meta = payload.get('case_meta') if isinstance(payload.get('case_meta'), dict) else {}
-    chart_title = _trim_text(payload.get('chart_title'), 100)
-    chart_type = _trim_text(payload.get('chart_type'), 100)
-    chart_data = payload.get('chart_data') if isinstance(payload.get('chart_data'), list) else []
-
-    if task not in ('explain_prediction', 'summarize_case', 'analyze_chart'):
-        return jsonify({'message': '不支持的 AI 任务类型', 'code': 400, 'data': None}), 400
 
     try:
-        if task == 'explain_prediction':
-            if not prediction_result:
-                return jsonify({'message': '缺少预测结果，无法解释', 'code': 400, 'data': None}), 400
-
-            system_prompt = (
-                '你是医疗数据分析系统中的 AI 助手。'
-                '你的职责是解释系统预测结果，帮助用户理解，不得把自己表述为医生。'
-                '不要给出明确诊断结论，不要开药，不要夸大确定性。'
-                '回答要简洁、自然，控制在4点以内，并明确提醒“仅供参考，需结合医生诊断”。'
-            )
-            user_prompt = (
-                f'用户输入的症状描述：{symptom_text or "未提供"}\n'
-                f'系统预测结果：{prediction_result}\n'
-                '请输出：1. 这个结果可能意味着什么；2. 结果为什么只能作为参考；'
-                '3. 用户下一步可以关注哪些症状或检查方向。'
-            )
-        elif task == 'summarize_case':
-            if not case_text:
-                return jsonify({'message': '缺少病例文本，无法总结', 'code': 400, 'data': None}), 400
-
-            meta_parts = []
-            for label, key in (
-                ('编号', 'id'),
-                ('疾病类型', 'type'),
-                ('性别', 'gender'),
-                ('年龄', 'age'),
-                ('患病时长', 'illDuration'),
-                ('医院', 'docHospital'),
-                ('科室', 'department'),
-            ):
-                value = _trim_text(case_meta.get(key), 200)
-                if value:
-                    meta_parts.append(f'{label}：{value}')
-
-            system_prompt = (
-                '你是医疗数据分析系统中的 AI 助手。'
-                '你的职责是总结病例文本，方便用户快速阅读。'
-                '不要虚构原文没有的信息，不要输出诊断建议。'
-                '请用简洁中文输出，分成“症状概述”“关键信息”“就诊建议”三部分，'
-                '其中“就诊建议”只能写通用性的下一步关注点，不能代替医生意见。'
-            )
-            user_prompt = (
-                f'病例基础信息：{"；".join(meta_parts) if meta_parts else "无"}\n'
-                f'病例文本：{case_text}\n'
-                '请基于以上内容生成简明总结。'
-            )
-        else:
-            if not chart_title or not chart_data:
-                return jsonify({'message': '缺少图表标题或图表数据，无法分析', 'code': 400, 'data': None}), 400
-
-            system_prompt = (
-                '你是医疗数据可视化分析系统中的 AI 助手。'
-                '你的职责是解读图表数据，帮助用户快速理解分布、集中趋势和关注重点。'
-                '不要把图表解读成医学诊断，不要虚构图表中不存在的信息。'
-                '如果图表与医院科室相关但未提供明确的空闲率指标，请使用“活跃度”“分布”“热度”表述，'
-                '不要直接下结论为“空闲程度”。'
-                '输出控制在3点以内，每点简洁自然。'
-            )
-            user_prompt = (
-                f'图表标题：{chart_title}\n'
-                f'图表类型：{chart_type or "统计图表"}\n'
-                f'图表数据：{json.dumps(chart_data, ensure_ascii=False)}\n'
-                '请输出：1. 图表主要结论；2. 数据分布特征；3. 值得关注的点。'
-            )
-
+        task, system_prompt, user_prompt = _build_ai_prompts(payload)
         content = _call_qwen_chat(system_prompt, user_prompt)
         return jsonify({
             'message': 'success',
@@ -787,11 +939,44 @@ def ai_assistant():
                 'content': content
             }
         })
+    except AIRequestValidationError as e:
+        return jsonify({'message': str(e), 'code': e.status_code, 'data': None}), e.status_code
     except requests.HTTPError as e:
         detail = e.response.text[:500] if e.response is not None and e.response.text else str(e)
         return jsonify({'message': f'调用千问接口失败: {detail}', 'code': 500, 'data': None}), 500
     except Exception as e:
         return jsonify({'message': f'AI 助手调用失败: {e}', 'code': 500, 'data': None}), 500
+
+
+@app.route('/ai/assistant/stream', methods=['POST'])
+@login_required
+def ai_assistant_stream():
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        task, system_prompt, user_prompt = _build_ai_prompts(payload)
+    except AIRequestValidationError as e:
+        return jsonify({'message': str(e), 'code': e.status_code, 'data': None}), e.status_code
+
+    def generate():
+        yield _format_sse('status', {'stage': 'connecting', 'message': 'AI 正在连接模型...'})
+        try:
+            for event_name, event_payload in _stream_qwen_chat(system_prompt, user_prompt):
+                yield _format_sse(event_name, event_payload)
+        except requests.HTTPError as e:
+            detail = e.response.text[:500] if e.response is not None and e.response.text else str(e)
+            yield _format_sse('error', {'message': f'调用千问接口失败: {detail}'})
+        except Exception as e:
+            yield _format_sse('error', {'message': f'AI 助手调用失败: {e}'})
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
 
 

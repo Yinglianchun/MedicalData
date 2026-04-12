@@ -39,8 +39,8 @@
             <span class="muted">管理员可管理全局数据，用户可预测与查看病例</span>
           </div>
           <div class="btn-group">
-            <el-button type="primary" native-type="submit" :loading="loading" class="btn-primary">{{ loading ? '登录中...' : '登录' }}</el-button>
-            <el-button type="text" class="btn-text" @click.prevent="handleRegister" :disabled="loading">注册账号</el-button>
+            <el-button type="primary" native-type="submit" :loading="loading" class="btn-primary glass-btn glass-btn--primary">{{ loading ? '登录中...' : '登录' }}</el-button>
+            <el-button class="btn-text glass-btn glass-btn--soft" @click.prevent="handleRegister" :disabled="loading">注册账号</el-button>
           </div>
         </form>
       </section>
@@ -59,8 +59,8 @@
         </el-form-item>
       </el-form>
       <span slot="footer">
-        <el-button @click="registerVisible = false">取消</el-button>
-        <el-button type="primary" :loading="registerLoading" @click="submitRegister">提交注册</el-button>
+        <el-button class="dialog-btn glass-btn glass-btn--soft" @click="registerVisible = false">取消</el-button>
+        <el-button type="primary" class="dialog-btn glass-btn glass-btn--primary" :loading="registerLoading" @click="submitRegister">提交注册</el-button>
       </span>
     </el-dialog>
   </div>
@@ -238,8 +238,9 @@ export default {
 .remember input { accent-color: var(--accent); }
 
 .btn-group { display: flex; align-items: center; gap: var(--sp-1); }
-.btn-primary { flex: 1; height: 44px; border-radius: var(--radius); background: linear-gradient(145deg, #2f80ed, #55a8ff); border: none; color: #fff; }
-.btn-text { color: var(--accent); font-weight: var(--fw-medium); }
+.btn-primary { flex: 1; min-width: 0; height: 46px; }
+.btn-text { min-width: 120px; }
+.dialog-btn { min-width: 110px; }
 
 @media (max-width: 960px) {
   .login-card { grid-template-columns: 1fr; }

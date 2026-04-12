@@ -274,21 +274,21 @@ export default {
       return [
         {
           key: 'age-distribution',
-          label: '分析各年龄段患病占比',
+          label: '各年龄段患病占比',
           title: '各年龄段患病占比',
           type: '年龄分布图',
           data: this.pieData,
         },
         {
           key: 'disease-distribution',
-          label: '分析疾病类型分布',
+          label: '疾病类型分布',
           title: '疾病类型分布',
           type: '疾病类型分布图',
           data: this.config1.data,
         },
         {
           key: 'department-distribution',
-          label: '分析医院科室环形图',
+          label: '医院科室环形图',
           title: '医院科室环形图',
           type: '科室活跃度分布图',
           data: this.circleData.slice(0, 5),

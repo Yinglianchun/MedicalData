@@ -9,14 +9,14 @@
     <!-- 操作栏 -->
     <div class="action-bar">
       <!-- 新增病例按钮 -->
-      <el-button class="btn-primary-glow" icon="el-icon-plus" @click="showAddDialog">新增病例</el-button>
+      <el-button class="btn-primary-glow glass-btn glass-btn--primary" icon="el-icon-plus" @click="showAddDialog">新增病例</el-button>
       <!-- 刷新按钮 -->
-      <el-button class="btn-ghost" icon="el-icon-refresh" @click="loadCases">刷新</el-button>
+      <el-button class="btn-ghost glass-btn glass-btn--soft" icon="el-icon-refresh" @click="loadCases">刷新</el-button>
       <!-- 查询输入框和操作 -->
       <div class="query-box">
         <input v-model.trim="searchCaseId" type="number" placeholder="按ID查询，如 12" @keyup.enter="handleSearch" />
-        <el-button class="btn-ghost" @click="handleSearch">查询</el-button>
-        <el-button class="btn-ghost" @click="resetSearch">清空</el-button>
+        <el-button class="btn-ghost glass-btn glass-btn--soft" @click="handleSearch">查询</el-button>
+        <el-button class="btn-ghost glass-btn glass-btn--soft" @click="resetSearch">清空</el-button>
       </div>
     </div>
 
@@ -212,8 +212,8 @@
 
         <!-- 弹窗底部操作按钮 -->
         <div class="dialog-footer">
-          <button type="button" class="btn-dialog-cancel" @click="closeDialog">取消</button>
-          <button type="button" class="btn-dialog-submit" @click="submitForm">{{ isEdit ? '保存' : '新增' }}</button>
+          <button type="button" class="btn-dialog-cancel glass-btn glass-btn--soft" @click="closeDialog">取消</button>
+          <button type="button" class="btn-dialog-submit glass-btn glass-btn--primary" @click="submitForm">{{ isEdit ? '保存' : '新增' }}</button>
         </div>
       </div>
     </div>
@@ -850,37 +850,11 @@ export default {
 }
 
 .btn-dialog-cancel {
-  padding: 10px 20px;
-  border-radius: 10px;
-  border: 1px solid rgba(82, 162, 228, 0.55);
-  background: rgba(15, 23, 42, 0.85);
-  color: #dbe8fb;
-  cursor: pointer;
-  font-size: var(--fs-14);
-  font-weight: var(--fw-medium);
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-}
-.btn-dialog-cancel:hover {
-  border-color: #5ecfff;
-  background: rgba(27, 41, 64, 0.95);
-  box-shadow: 0 0 12px rgba(94, 207, 255, 0.12);
+  min-width: 94px;
 }
 
 .btn-dialog-submit {
-  padding: 10px 22px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  font-size: var(--fs-14);
-  font-weight: var(--fw-bold);
-  color: #fff;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  box-shadow: 0 4px 16px rgba(47, 128, 237, 0.35);
-  transition: transform 0.15s, box-shadow 0.2s;
-}
-.btn-dialog-submit:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(47, 128, 237, 0.45);
+  min-width: 102px;
 }
 
 @media (max-width: 768px) {

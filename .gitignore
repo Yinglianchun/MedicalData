@@ -24,3 +24,15 @@ build/
 
 # 排除本地环境变量
 .env
+# 排除 %SystemDrive%
+%SystemDrive%/
+# 排除md文件
+*.md
+# 排除pdf文件
+*.pdf
+# 排除docx文件
+*.docx
+# 排除doc文件
+*.doc
+# 排除sql
+*.sql

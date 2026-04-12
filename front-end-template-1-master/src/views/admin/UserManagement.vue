@@ -17,17 +17,17 @@
         <span class="search-mode-tag" :class="isIdSearch ? 'tag-id' : 'tag-name'">
           {{ isIdSearch ? 'ID 精确' : '用户名模糊' }}
         </span>
-        <button class="btn-search" @click="loadUsers">搜索</button>
-        <button class="btn-reset" @click="resetSearch">重置</button>
+        <button class="btn-search glass-btn glass-btn--primary" @click="loadUsers">搜索</button>
+        <button class="btn-reset glass-btn glass-btn--soft" @click="resetSearch">重置</button>
       </div>
-      <button class="btn-primary" @click="openCreate">+ 新增用户</button>
+      <button class="btn-primary glass-btn glass-btn--primary" @click="openCreate">+ 新增用户</button>
     </div>
 
     <!-- 用户列表 -->
     <div class="table-card">
       <div class="table-header">
         <h3>用户列表</h3>
-        <button class="btn-refresh" @click="loadUsers">刷新</button>
+        <button class="btn-refresh glass-btn glass-btn--soft" @click="loadUsers">刷新</button>
       </div>
 
       <div v-if="loading" class="loading-state">
@@ -159,8 +159,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-cancel" @click="closeDialog">取消</button>
-          <button class="btn-confirm" @click="submitForm" :disabled="submitting">
+          <button class="btn-cancel glass-btn glass-btn--soft" @click="closeDialog">取消</button>
+          <button class="btn-confirm glass-btn glass-btn--primary" @click="submitForm" :disabled="submitting">
             {{ submitting ? '提交中...' : '确定' }}
           </button>
         </div>
@@ -431,48 +431,14 @@ export default {
 
 .btn-search,
 .btn-reset {
-  padding: 8px 16px;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.2s;
+  min-width: 86px;
+  padding: 0 18px;
 }
-
-.btn-search {
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  color: #fff;
-}
-
-.btn-reset {
-  background: var(--bg-2);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.btn-search:hover { 
-  transform: translateY(var(--hover-lift-y));
-  box-shadow: var(--hover-glow-shadow);
-}
-.btn-reset:hover { background: #1b2940; color: var(--text); }
 
 .btn-primary {
-  padding: 8px 20px;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.2s;
+  min-width: 138px;
+  padding: 0 22px;
   white-space: nowrap;
-}
-
-.btn-primary:hover {
-  transform: translateY(var(--hover-lift-y));
-  box-shadow: var(--hover-glow-shadow);
 }
 
 /* 表格卡片 */
@@ -509,19 +475,8 @@ export default {
 }
 
 .btn-refresh {
-  padding: 7px 16px;
-  background: var(--bg-2);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.btn-refresh:hover {
-  background: #1b2940;
-  color: var(--text);
+  min-width: 88px;
+  padding: 0 18px;
 }
 
 .loading-state,
@@ -828,38 +783,11 @@ export default {
 }
 
 .btn-cancel {
-  padding: 9px 20px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
+  min-width: 94px;
 }
-
-.btn-cancel:hover { background: #1b2940; color: var(--text); }
 
 .btn-confirm {
-  padding: 9px 24px;
-  background: linear-gradient(135deg, #2f80ed, #55a8ff);
-  border: none;
-  border-radius: var(--radius);
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-confirm:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(47, 128, 237, 0.35);
-}
-
-.btn-confirm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  min-width: 102px;
 }
 
 /* 响应式 */
