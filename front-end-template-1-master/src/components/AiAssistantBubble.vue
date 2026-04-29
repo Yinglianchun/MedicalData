@@ -1,6 +1,12 @@
 <template>
-  <div class="ai-assistant">
-    <button class="ai-fab" type="button" @click="dialogVisible = true">
+  <div class="ai-assistant" :style="fabPositionStyle">
+    <button
+      class="ai-fab"
+      :class="{ 'ai-fab--dragging': fabDragging }"
+      type="button"
+      @click="handleFabClick"
+      @pointerdown="startFabDrag"
+    >
       AI
     </button>
 
@@ -84,7 +90,22 @@ export default {
       resultTitle: 'AI 回复',
       resultContent: '',
       streamStatus: 'AI 正在连接模型...',
-      streamController: null
+      streamController: null,
+      fabPosition: {
+        left: null,
+        top: null
+      },
+      fabDragging: false,
+      fabDragState: {
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        startLeft: 0,
+        startTop: 0,
+        moved: false,
+        target: null
+      },
+      suppressFabClick: false
     }
   },
   computed: {
@@ -104,6 +125,18 @@ export default {
         return '正在等待模型返回内容...'
       }
       return '点击上方按钮开始使用 AI 助手。'
+    },
+    fabPositionStyle() {
+      if (this.fabPosition.left === null || this.fabPosition.top === null) {
+        return {}
+      }
+
+      return {
+        left: `${this.fabPosition.left}px`,
+        top: `${this.fabPosition.top}px`,
+        right: 'auto',
+        bottom: 'auto'
+      }
     }
   },
   watch: {
@@ -113,10 +146,134 @@ export default {
       }
     }
   },
+  mounted() {
+    this.syncFabPositionFromDom()
+    window.addEventListener('resize', this.keepFabInViewport)
+  },
   beforeDestroy() {
+    window.removeEventListener('resize', this.keepFabInViewport)
+    this.removeFabDragListeners()
     this.abortActiveStream()
   },
   methods: {
+    handleFabClick(event) {
+      if (this.suppressFabClick) {
+        if (event) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        this.suppressFabClick = false
+        return
+      }
+
+      this.dialogVisible = true
+    },
+    syncFabPositionFromDom() {
+      this.$nextTick(() => {
+        if (!this.$el) {
+          return
+        }
+
+        const rect = this.$el.getBoundingClientRect()
+        this.fabPosition = this.clampFabPosition(rect.left, rect.top)
+      })
+    },
+    keepFabInViewport() {
+      if (this.fabPosition.left === null || this.fabPosition.top === null) {
+        this.syncFabPositionFromDom()
+        return
+      }
+
+      this.fabPosition = this.clampFabPosition(this.fabPosition.left, this.fabPosition.top)
+    },
+    clampFabPosition(left, top) {
+      const margin = 8
+      const width = this.$el ? this.$el.offsetWidth : 68
+      const height = this.$el ? this.$el.offsetHeight : 68
+      const maxLeft = Math.max(margin, window.innerWidth - width - margin)
+      const maxTop = Math.max(margin, window.innerHeight - height - margin)
+
+      return {
+        left: Math.min(Math.max(left, margin), maxLeft),
+        top: Math.min(Math.max(top, margin), maxTop)
+      }
+    },
+    startFabDrag(event) {
+      if (event.button !== undefined && event.button !== 0) {
+        return
+      }
+
+      const rect = this.$el.getBoundingClientRect()
+      const startPosition = this.clampFabPosition(rect.left, rect.top)
+      this.fabPosition = startPosition
+      this.fabDragging = true
+      this.fabDragState = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeft: startPosition.left,
+        startTop: startPosition.top,
+        moved: false,
+        target: event.currentTarget
+      }
+
+      if (event.currentTarget && event.currentTarget.setPointerCapture) {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }
+
+      window.addEventListener('pointermove', this.onFabDrag)
+      window.addEventListener('pointerup', this.endFabDrag)
+      window.addEventListener('pointercancel', this.endFabDrag)
+    },
+    onFabDrag(event) {
+      if (!this.fabDragging || event.pointerId !== this.fabDragState.pointerId) {
+        return
+      }
+
+      const offsetX = event.clientX - this.fabDragState.startX
+      const offsetY = event.clientY - this.fabDragState.startY
+      if (Math.abs(offsetX) > 3 || Math.abs(offsetY) > 3) {
+        this.fabDragState.moved = true
+      }
+
+      this.fabPosition = this.clampFabPosition(
+        this.fabDragState.startLeft + offsetX,
+        this.fabDragState.startTop + offsetY
+      )
+    },
+    endFabDrag(event) {
+      if (!this.fabDragging || event.pointerId !== this.fabDragState.pointerId) {
+        return
+      }
+
+      if (this.fabDragState.target && this.fabDragState.target.releasePointerCapture) {
+        this.fabDragState.target.releasePointerCapture(event.pointerId)
+      }
+
+      if (this.fabDragState.moved) {
+        this.suppressFabClick = true
+        window.setTimeout(() => {
+          this.suppressFabClick = false
+        }, 0)
+      }
+
+      this.fabDragging = false
+      this.fabDragState = {
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        startLeft: 0,
+        startTop: 0,
+        moved: false,
+        target: null
+      }
+      this.removeFabDragListeners()
+    },
+    removeFabDragListeners() {
+      window.removeEventListener('pointermove', this.onFabDrag)
+      window.removeEventListener('pointerup', this.endFabDrag)
+      window.removeEventListener('pointercancel', this.endFabDrag)
+    },
     async runExplainPrediction() {
       if (!this.canExplainPrediction) {
         this.$message.warning('当前没有可解释的预测结果')
@@ -304,18 +461,26 @@ export default {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 1px;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: 0 0 22px rgba(79, 217, 255, 0.45);
   z-index: 99999;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   outline: none;
   border: 1px solid rgba(173, 234, 255, 0.75);
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
+  touch-action: none;
+  user-select: none;
 }
 
 .ai-fab:hover {
   transform: translateY(-2px) scale(1.03);
   box-shadow: 0 0 28px rgba(79, 217, 255, 0.58);
+}
+
+.ai-fab--dragging,
+.ai-fab--dragging:hover {
+  transform: none;
+  cursor: grabbing;
 }
 
 .ai-panel {
