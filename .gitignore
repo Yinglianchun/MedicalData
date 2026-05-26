@@ -36,3 +36,7 @@ build/
 *.doc
 # 排除sql
 *.sql
+
+# 排除临时参考文献提取结果
+tmp/pdfs/
+tmp/reference_extracts.json
