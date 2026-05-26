@@ -842,7 +842,14 @@ def submitModel():
 
     if request.method == 'POST':
         payload = request.get_json(silent=True) or {}
-        content = payload.get('content', '')
+        content = str(payload.get('content') or '').strip()
+        if not content:
+            return jsonify({
+                'message': '症状文本不能为空',
+                'code': 400,
+                'data': None
+            }), 400
+
         real_only = to_bool(payload.get('real_only'), False)
         model = get_or_train_model(real_only=real_only)
         prediction_payload = pred(model, content)
